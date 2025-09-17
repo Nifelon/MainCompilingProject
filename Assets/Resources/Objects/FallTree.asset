@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4426f9c395ac0074f8fee39bf77de7a7, type: 3}
+  m_Name: FallTree
+  m_EditorClassIdentifier: 
+  typeObject: 3
+  NameObject: "\u0423\u043F\u0430\u0432\u0448\u0435\u0435 \u0434\u0435\u0440\u0435\u0432\u043E"
+  Size: {x: 1, y: 2}
+  sprite: {fileID: -925811249134464395, guid: 777fb57e121d4fd4ab39873e135b325a, type: 3}
+  movementModifier: 0
+  avoidOtherObjects: 0
+  HitBox: 200
+  dropIterationsRange: {x: 2, y: 5}
+  dropItems:
+  - itemID: 1
+    chanse: 1

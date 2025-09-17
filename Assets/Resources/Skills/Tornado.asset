@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 630d9913b7f93d54dbb5794fb3df05f4, type: 3}
+  m_Name: Tornado
+  m_EditorClassIdentifier: 
+  skillName: "\u041A\u0440\u0443\u0433\u043E\u0432\u043E\u0439 \u0443\u0434\u0430\u0440"
+  description: 
+  icon: {fileID: 4501598203089304796, guid: 7f280a57599ce9246aba08d997d10e27, type: 3}
+  type: 0
+  minDamage: 15
+  maxDamage: 35
+  CritChanse: 0
+  radius: 1
+  cooldown: 4
+  defaultKey: 50
+  requiresTarget: 0
+  ignoreObstacles: 0

@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5c5056e2e270e04ab0d89450a1e1125, type: 3}
+  m_Name: MediumZone
+  m_EditorClassIdentifier: 
+  zoneName: "\u0423\u043C\u0435\u0440\u0435\u043D\u043D\u044B\u0439 \u043A\u043B\u0438\u043C\u0430\u0442"
+  zoneType: 2
+  zoneColor: {r: 0.3921569, g: 1, b: 0, a: 1}
+  defaultBiome: 3
+  biomeChances:
+  - biome: 4
+    minPerlinValue: 0
+    maxPerlinValue: 0.4
+  - biome: 3
+    minPerlinValue: 0.4
+    maxPerlinValue: 1
+  startPercent: 30
+  endPercent: 70

@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 38a2a8f1fb77c354eb493a51c2f612ba, type: 3}
+  m_Name: Hunter
+  m_EditorClassIdentifier: 
+  npcType: 9
+  spawnChances:
+  - biome: 4
+    chance: 0.3
+  - biome: 3
+    chance: 0.9
+  - biome: 5
+    chance: 0.2
+  isHostileByDefault: 0
+  reactsToPlayer: 1
+  npcIcon: {fileID: 0}
+  title: "\u041E\u0445\u043E\u0442\u043D\u0438\u043A"
+  outfitColor: {r: 0.26820046, g: 0.38679248, b: 0.31929088, a: 1}
+  isInteractive: 1
+  interactionType: 3
+  dialogueSetID: 0
+  canBeInteractedWith: 1

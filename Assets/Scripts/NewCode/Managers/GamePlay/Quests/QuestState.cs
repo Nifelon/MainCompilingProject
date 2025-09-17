@@ -1,0 +1,1 @@
+public enum QuestState { Inactive, Active, Done }
