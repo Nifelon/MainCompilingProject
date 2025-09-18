@@ -1,9 +1,16 @@
+using System;
+
 public static class QuestEventBus
 {
-    public static System.Action<string> OnUnitKilled;     // kind
-    public static System.Action<string, int> OnCollect;    // id, amt
-    public static System.Action<string, int> OnCraft;      // id, amt
-    public static void RaiseUnitKilled(string kind) => OnUnitKilled?.Invoke(kind);
-    public static void RaiseCollect(string id, int amt) => OnCollect?.Invoke(id, amt);
-    public static void RaiseCraft(string id, int amt) => OnCraft?.Invoke(id, amt);
+    // kill
+    public static event Action<string> OnUnitKilled;
+    public static void RaiseUnitKilled(string unitKind) => OnUnitKilled?.Invoke(unitKind);
+
+    // collect
+    public static event Action<string, int> OnCollect;
+    public static void RaiseCollect(string itemId, int count) => OnCollect?.Invoke(itemId, count);
+
+    // craft
+    public static event Action<string, int> OnCraft;
+    public static void RaiseCraft(string itemId, int count) => OnCraft?.Invoke(itemId, count);
 }
