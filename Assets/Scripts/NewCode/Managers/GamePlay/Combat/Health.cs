@@ -63,14 +63,22 @@ public class Health : MonoBehaviour
         if (countsForKillQuests && !string.IsNullOrEmpty(unitKind))
             QuestEventBus.RaiseUnitKilled(unitKind);
 
-        if (respawnPoint) // игрок
+        // Показ лута (для теста — только волк)
+        if (LootWindow.Instance != null)
         {
-            transform.position = respawnPoint.position;
-            currentHP = maxHP;
-            _dead = false;
-            return;
+            if (unitKind == "Wolf")
+            {
+                // без target-typed new — чтобы компилилось на любом C#
+                var drop = new System.Collections.Generic.List<(string, int)> { ("Skin", 1) };
+                LootWindow.Instance.Show(drop);
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[Health] LootWindow.Instance == null");
         }
 
+        if (respawnPoint) { /* игрок → респаун */ return; }
         gameObject.SetActive(false);
     }
 

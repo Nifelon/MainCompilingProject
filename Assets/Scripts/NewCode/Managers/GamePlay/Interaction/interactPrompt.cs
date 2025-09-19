@@ -1,4 +1,4 @@
-using UnityEngine;
+п»їusing UnityEngine;
 using UnityEngine.UI;
 
 public class InteractPrompt : MonoBehaviour
@@ -6,7 +6,13 @@ public class InteractPrompt : MonoBehaviour
     public static InteractPrompt Instance;
     public GameObject root; public Text label;
 
-    void Awake() { Instance = this; if (!root) root = gameObject; Hide(); }
-    public void Show(string text = "E — Взаимодействие") { if (label) label.text = text; root.SetActive(true); }
+    void Awake()
+    {
+        Instance = this;
+        if (!root) root = gameObject;
+        if (!label) label = GetComponentInChildren<UnityEngine.UI.Text>(true);
+    }
+    void Start() { Hide(); } // в†ђ РїРµСЂРµРЅРѕСЃ
+    public void Show(string text = "E вЂ” Р’Р·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ") { if (label) label.text = text; root.SetActive(true); }
     public void Hide() { if (root) root.SetActive(false); }
 }
