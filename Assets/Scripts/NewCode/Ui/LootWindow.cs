@@ -20,6 +20,7 @@ public class LootWindow : MonoBehaviour
         if (!root) root = gameObject;
         if (takeAllBtn) takeAllBtn.onClick.AddListener(TakeAll);
         if (closeBtn) closeBtn.onClick.AddListener(() => root.SetActive(false));
+        root.SetActive(false);
     }
 
     public void Show(List<(string id, int count)> items)

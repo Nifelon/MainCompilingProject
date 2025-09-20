@@ -62,7 +62,17 @@ public class Health : MonoBehaviour
 
         if (countsForKillQuests && !string.IsNullOrEmpty(unitKind))
             QuestEventBus.RaiseUnitKilled(unitKind);
-
+        #region Новый способ смерти ГГ
+        if (respawnPoint != null)
+        {
+            currentHP = maxHP;
+            transform.position = respawnPoint.position;
+            _bleedTicksLeft = 0;
+            _bleedDamagePerTick = 0;
+            _dead = false;
+            return;
+        }
+        #endregion
         // Показ лута (для теста — только волк)
         if (LootWindow.Instance != null)
         {

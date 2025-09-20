@@ -5,34 +5,69 @@ public class DevHotkeys : MonoBehaviour
 {
     [Header("IDs должны совпадать с Quest.targetId")]
     public string collectId = "Berry"; // дл€ квеста Collect
-    public string craftId = "Patch"; // дл€ квеста Craft
+    public string craftId = "Patch";   // дл€ квеста Craft
     public int amount = 1;
+
+    [Header("Player damage hotkeys")]
+    public KeyCode damageKey = KeyCode.K;
+    public int damageAmount = 15;
+    [SerializeField] Health _playerHp; // кэш
 
     void Update()
     {
-        // быстрый рестарт сцены (удобно)
+        // быстрый рестарт сцены
         if (Input.GetKeyDown(KeyCode.R))
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
 
-        // эмул€ци€ сбора
+        // эмуль сбор
         if (Input.GetKeyDown(KeyCode.F5))
         {
             QuestEventBus.RaiseCollect(collectId, amount);
             Debug.Log($"[DEV] Collect: {collectId} +{amount}");
         }
 
-        // эмул€ци€ крафта
+        // эмуль крафта
         if (Input.GetKeyDown(KeyCode.F6))
         {
             QuestEventBus.RaiseCraft(craftId, amount);
             Debug.Log($"[DEV] Craft: {craftId} +{amount}");
         }
 
-        // на вс€кий случай Ч быстро активировать следующий доступный квест
+        // быстрый старт любого доступного квеста
         if (Input.GetKeyDown(KeyCode.F4))
         {
-            var qm = Object.FindAnyObjectByType<QuestManager>(FindObjectsInactive.Exclude);
+            var qm = Object.FindFirstObjectByType<QuestManager>(FindObjectsInactive.Exclude);
             qm?.ActivateAnyAvailable();
         }
+
+        // --- HOTKEYS: урон/смерть игрока ---
+        if (Input.GetKeyDown(damageKey))
+        {
+            var hp = GetPlayerHealth();
+            if (hp != null) hp.ApplyDamage(new DamageInfo { amount = damageAmount });
+        }
+
+        if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(damageKey))
+        {
+            var hp = GetPlayerHealth();
+            if (hp != null) hp.ApplyDamage(new DamageInfo { amount = hp.currentHP }); // добиваем до 0
+        }
+    }
+
+    Health GetPlayerHealth()
+    {
+        if (_playerHp != null) return _playerHp;
+
+        // критерий "игрок": в Health указан respawnPoint
+        var all = Object.FindObjectsByType<Health>(FindObjectsSortMode.None);
+        foreach (var h in all)
+        {
+            if (h != null && h.respawnPoint != null) { _playerHp = h; break; }
+        }
+        if (_playerHp == null)
+        {
+            Debug.LogWarning("[DEV] Player Health не найден (нужно указать respawnPoint у компонента Health игрока).");
+        }
+        return _playerHp;
     }
 }

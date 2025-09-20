@@ -36,12 +36,8 @@ public class MapMarkersController : MonoBehaviour
     {
         get
         {
-            // Unity 6: предпочтительно FindFirstObjectByType; можно и FindObjectOfType
-#if UNITY_2023_1_OR_NEWER
             if (_wmCache == null) _wmCache = FindFirstObjectByType<WorldManager>();
-#else
-            if (_wmCache == null) _wmCache = FindObjectOfType<WorldManager>();
-#endif
+
             if (_wmCache != null)
             {
                 // предполагаем, что SizeMap — полный размер (W,H)

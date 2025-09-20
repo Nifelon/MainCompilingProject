@@ -1,38 +1,21 @@
 ﻿using UnityEngine;
 
-public class NPC_Soldier : MonoBehaviour
+/// Солдат: выдаёт «слухи». Реализует IInteractable (Hint + Interact).
+public class NPC_Soldier : MonoBehaviour, IInteractable
 {
     [TextArea]
-    public string[] rumors = {
-        "В лесу видели волков.",
-        "Командир собирает людей.",
-        "Говорят, ягоды уродились."
+    public string[] lines =
+    {
+        "В роще к северу слышны вои — там волки.",
+        "Командир ищет смельчаков. Загляни в лагерь."
     };
 
-    public DialogPanel dialog;
-    int idx;
+    [SerializeField] private string hint = "E — Поговорить (Солдат)";
+    public string Hint => hint;                  // Требуемое свойство интерфейса
 
-    public void Interact() => ShowRumor();
-
-    void ShowRumor()
+    public void Interact(GameObject actor)
     {
-        if (!dialog) return;
-        var text = rumors.Length > 0 ? rumors[idx % rumors.Length] : "Пока слухов нет.";
-        dialog.SetBody(
-    title: "Солдат",
-    body: text,
-    primaryLabel: "Ещё",
-    onPrimary: NextRumor,
-    secondaryLabel: "Закрыть",
-    onSecondary: () => dialog.Show(false),
-    subtitle: "Стражник" // ← опционально
-);
-        dialog.Show(true);
-    }
-
-    void NextRumor()
-    {
-        idx = (idx + 1) % Mathf.Max(1, rumors.Length);
-        ShowRumor();
+        var panel = Object.FindFirstObjectByType<DialogPanel>();
+        DialogUtil.ShowLines(panel, "Солдат", lines);
     }
 }
