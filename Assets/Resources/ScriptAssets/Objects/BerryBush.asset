@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb5ae91b2115614587b9f43b85804b9, type: 3}
+  m_Name: BerryBush
+  m_EditorClassIdentifier: 
+  type: 6
+  displayName: "\u042F\u0433\u043E\u0434\u043D\u044B\u0439 \u043A\u0443\u0441\u0442"
+  footprint: {x: 1, y: 1}
+  pivotOffsetWorld: {x: 0, y: 0}
+  visualHeightUnits: 0
+  movementModifier: 0
+  destructible: 0
+  maxHP: 1
+  dropOnDestroy: 0
+  drops: []
+  spriteVariants:
+  - {fileID: 1887569513317297412, guid: 956195a6f4a9a264eb4b863e8254c5d0, type: 3}
+  prefabOverride: {fileID: 0}
+  harvest:
+    harvestable: 1
+    harvestDrops:
+    - itemId: Berry
+      minCount: 3
+      maxCount: 8
+      chance: 1
+    destroyOnHarvest: 0
+    transformToType: 5
+    respawnSeconds: 60
+    interactPrompt: "\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u0415, \u0447\u0442\u043E\u0431\u044B
+      \u0441\u043E\u0431\u0440\u0430\u0442\u044C"
+  tags: 4

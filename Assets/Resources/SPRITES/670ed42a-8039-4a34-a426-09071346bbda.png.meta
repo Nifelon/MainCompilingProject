@@ -1,10 +1,16 @@
 fileFormatVersion: 2
-guid: d25256ff4b81dec47aa8a843efc13a7f
+guid: 833a8f57592e97f4893c75d4b5019aa4
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -4751852290091092222
-    second: Trawa_suhaya1.12_0
+      213: 4625442135489042904
+    second: 670ed42a-8039-4a34-a426-09071346bbda_0
+  - first:
+      213: -2113319018511867815
+    second: 670ed42a-8039-4a34-a426-09071346bbda_1
+  - first:
+      213: -9050337937239464821
+    second: 670ed42a-8039-4a34-a426-09071346bbda_2
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -51,7 +57,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 218
+  spritePixelsToUnits: 100
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -100,13 +106,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Trawa_suhaya1.12_0
+      name: 670ed42a-8039-4a34-a426-09071346bbda_0
       rect:
         serializedVersion: 2
-        x: 15
-        y: 10
-        width: 220
-        height: 220
+        x: 70
+        y: 163
+        width: 283
+        height: 726
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +121,52 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 2077effb4870e0eb0800000000000000
-      internalID: -4751852290091092222
+      spriteID: 8d9d2f69d1fd03040800000000000000
+      internalID: 4625442135489042904
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: 670ed42a-8039-4a34-a426-09071346bbda_1
+      rect:
+        serializedVersion: 2
+        x: 354
+        y: 173
+        width: 317
+        height: 676
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 950e58cac8bfba2e0800000000000000
+      internalID: -2113319018511867815
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: 670ed42a-8039-4a34-a426-09071346bbda_2
+      rect:
+        serializedVersion: 2
+        x: 670
+        y: 160
+        width: 283
+        height: 644
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b84a999c89db66280800000000000000
+      internalID: -9050337937239464821
       vertices: []
       indices: 
       edges: []
@@ -125,7 +175,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 3d519f5ad0ed19b4789b464d5d3d5022
+    spriteID: 17508e254ddac3741873233f13e1d970
     internalID: 0
     vertices: []
     indices: 
@@ -135,7 +185,9 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Trawa_suhaya1.12_0: -4751852290091092222
+      670ed42a-8039-4a34-a426-09071346bbda_0: 4625442135489042904
+      670ed42a-8039-4a34-a426-09071346bbda_1: -2113319018511867815
+      670ed42a-8039-4a34-a426-09071346bbda_2: -9050337937239464821
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

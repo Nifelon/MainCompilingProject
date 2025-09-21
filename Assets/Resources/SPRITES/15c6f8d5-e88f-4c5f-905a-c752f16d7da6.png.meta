@@ -1,10 +1,37 @@
 fileFormatVersion: 2
-guid: d25256ff4b81dec47aa8a843efc13a7f
+guid: cdc11639699d588478a4401506b0e2ce
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -4751852290091092222
-    second: Trawa_suhaya1.12_0
+      213: -5247774315298199334
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_0
+  - first:
+      213: -5105241131869888385
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_1
+  - first:
+      213: 2466637611271452503
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_2
+  - first:
+      213: -835828081785643307
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_3
+  - first:
+      213: 1887448655620533057
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_4
+  - first:
+      213: 8134051435387535849
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_5
+  - first:
+      213: -8553449595346596636
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_6
+  - first:
+      213: -4139542759413753023
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_7
+  - first:
+      213: 17465774555500557
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_8
+  - first:
+      213: 6143906738413196658
+    second: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_9
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -51,7 +78,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 218
+  spritePixelsToUnits: 100
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -100,13 +127,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Trawa_suhaya1.12_0
+      name: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_0
       rect:
         serializedVersion: 2
-        x: 15
-        y: 10
-        width: 220
-        height: 220
+        x: 38
+        y: 137
+        width: 402
+        height: 804
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +142,52 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 2077effb4870e0eb0800000000000000
-      internalID: -4751852290091092222
+      spriteID: ad86b3b60192c27b0800000000000000
+      internalID: -5247774315298199334
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_1
+      rect:
+        serializedVersion: 2
+        x: 516
+        y: 175
+        width: 381
+        height: 482
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f70ae224d3a8629b0800000000000000
+      internalID: -5105241131869888385
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: 15c6f8d5-e88f-4c5f-905a-c752f16d7da6_2
+      rect:
+        serializedVersion: 2
+        x: 984
+        y: 142
+        width: 402
+        height: 755
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 757f371b6d14b3220800000000000000
+      internalID: 2466637611271452503
       vertices: []
       indices: 
       edges: []
@@ -125,7 +196,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 3d519f5ad0ed19b4789b464d5d3d5022
+    spriteID: def72e6fe78884848982cd0ced6e64c7
     internalID: 0
     vertices: []
     indices: 
@@ -135,7 +206,9 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Trawa_suhaya1.12_0: -4751852290091092222
+      15c6f8d5-e88f-4c5f-905a-c752f16d7da6_0: -5247774315298199334
+      15c6f8d5-e88f-4c5f-905a-c752f16d7da6_1: -5105241131869888385
+      15c6f8d5-e88f-4c5f-905a-c752f16d7da6_2: 2466637611271452503
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

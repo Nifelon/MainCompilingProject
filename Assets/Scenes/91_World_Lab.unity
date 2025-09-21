@@ -215,6 +215,7 @@ GameObject:
   - component: {fileID: 186056076}
   - component: {fileID: 186056075}
   - component: {fileID: 186056081}
+  - component: {fileID: 186056082}
   m_Layer: 0
   m_Name: Systems
   m_TagString: Untagged
@@ -286,6 +287,7 @@ MonoBehaviour:
   order: 100
   systems:
   - {fileID: 1488604824}
+  - {fileID: 186056082}
 --- !u!114 &186056079
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -333,6 +335,39 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   world: {fileID: 186056079}
   hud: {fileID: 526731802}
+--- !u!114 &186056082
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 186056074}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 627641bdb7e48a945a0426ca5624ab2b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  worldSeed: 12345
+  chunkSize: 64
+  biomeProfiles:
+  - {fileID: 11400000, guid: 76eb09318477a0f4b87ae86757ecf061, type: 2}
+  - {fileID: 11400000, guid: 3788d1e216e977242841bb1ed637f839, type: 2}
+  - {fileID: 11400000, guid: 540a7254d60edfb43a4d53240b3894c5, type: 2}
+  - {fileID: 11400000, guid: 35626cdfc7f55024f95ce09838d28a0b, type: 2}
+  - {fileID: 11400000, guid: dd34959c0f0ecc64d976ba8ed0761f5f, type: 2}
+  - {fileID: 11400000, guid: f81c98899dc565f42a9350e6c95a1b44, type: 2}
+  objectDatabase:
+  - {fileID: 11400000, guid: da5c3ba9631801442a8764848a7ef7c4, type: 2}
+  - {fileID: 11400000, guid: a0be714c45d4c304b97702207e432d83, type: 2}
+  - {fileID: 11400000, guid: e92d34afa9ca1784ba47a68cec7b0c62, type: 2}
+  - {fileID: 11400000, guid: a2f960965f2938b43b01487921b88740, type: 2}
+  - {fileID: 11400000, guid: 1f713af3183774849a3d71edc844d0c1, type: 2}
+  - {fileID: 11400000, guid: 01849eed35d18c14e80aeeee1c2f5aa7, type: 2}
+  - {fileID: 11400000, guid: c8a13be389b0fbd41a7ed121118f80b2, type: 2}
+  objectPool: {fileID: 0}
+  cellSize: 1
+  ySort: 1
+  ySortMul: 10
 --- !u!1 &307055006
 GameObject:
   m_ObjectHideFlags: 0
@@ -465,6 +500,7 @@ GameObject:
   - component: {fileID: 391172009}
   - component: {fileID: 391172008}
   - component: {fileID: 391172007}
+  - component: {fileID: 391172010}
   m_Layer: 0
   m_Name: Polling
   m_TagString: Untagged
@@ -501,8 +537,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   player: {fileID: 1772076462}
   mainTilePool: {fileID: 391172007}
+  objectManager: {fileID: 186056082}
   radius: 55
   cellSize: 1
+  objectsChunkSize: 64
+  objectsChunkRadius: 2
 --- !u!4 &391172009
 Transform:
   m_ObjectHideFlags: 0
@@ -518,6 +557,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &391172010
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 391172006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 174f0e43ca67c244d816e9a5f51e2442, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  defaultSpritePrefab: {fileID: 4810241971616142191, guid: 1cd78f1e20ddce643b91336ed0afc827, type: 3}
+  overrides: []
+  objectsRoot: {fileID: 0}
 --- !u!1 &488476175
 GameObject:
   m_ObjectHideFlags: 0

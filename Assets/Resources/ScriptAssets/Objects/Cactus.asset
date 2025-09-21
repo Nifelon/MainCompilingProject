@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: acb5ae91b2115614587b9f43b85804b9, type: 3}
+  m_Name: Cactus
+  m_EditorClassIdentifier: 
+  type: 4
+  displayName: "\u041A\u0430\u043A\u0442\u0443\u0441"
+  footprint: {x: 1, y: 2}
+  pivotOffsetWorld: {x: 0, y: 0}
+  visualHeightUnits: 0.7
+  movementModifier: 0
+  destructible: 0
+  maxHP: 1
+  dropOnDestroy: 0
+  drops: []
+  spriteVariants:
+  - {fileID: -5105241131869888385, guid: cdc11639699d588478a4401506b0e2ce, type: 3}
+  - {fileID: 2466637611271452503, guid: cdc11639699d588478a4401506b0e2ce, type: 3}
+  - {fileID: -5247774315298199334, guid: cdc11639699d588478a4401506b0e2ce, type: 3}
+  prefabOverride: {fileID: 0}
+  harvest:
+    harvestable: 0
+    harvestDrops: []
+    destroyOnHarvest: 0
+    transformToType: 0
+    respawnSeconds: 0
+    interactPrompt: 
+  tags: 12

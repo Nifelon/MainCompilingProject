@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 051ac2ae580d5254283839d79b0fe57f, type: 3}
+  m_Name: SnowyForest_SpawnProfile
+  m_EditorClassIdentifier: 
+  biome: 1
+  rules:
+  - objectType: 2
+    targetPerChunk: 55
+    mode: 1
+    clusterCountRange: {x: 4, y: 8}
+    minDistanceSameType: 2
+    minDistanceAny: 1.2
+    avoidOtherObjects: 1
+    useNoiseGate: 1
+    noiseThreshold: 0.5
+    noiseScale: 0.06
+    variants: 3
+  - objectType: 5
+    targetPerChunk: 12
+    mode: 1
+    clusterCountRange: {x: 3, y: 5}
+    minDistanceSameType: 1.2
+    minDistanceAny: 1
+    avoidOtherObjects: 1
+    useNoiseGate: 1
+    noiseThreshold: 0.55
+    noiseScale: 0.07
+    variants: 1
+  - objectType: 3
+    targetPerChunk: 12
+    mode: 2
+    clusterCountRange: {x: 0, y: 0}
+    minDistanceSameType: 2
+    minDistanceAny: 1
+    avoidOtherObjects: 1
+    useNoiseGate: 1
+    noiseThreshold: 0.55
+    noiseScale: 0.07
+    variants: 3
+  densityMultiplier: 1

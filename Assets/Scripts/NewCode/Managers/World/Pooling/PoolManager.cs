@@ -1,9 +1,11 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using Game.World.Map.Biome; // IBiomeService / BiomeManager
+using Game.World.Objects;   // ObjectManager (визуал объектов грузим/выгружаем через него)
 
-/// Управляет окном активных клеток вокруг игрока.
-/// Прокидывает в пул правильную функцию окраски: cell -> biome -> color.
+/// Управляет окном активных клеток вокруг игрока (тайлы + объекты).
+/// 1) Тайлы: выдаёт пулу функцию "клетка -> спрайт биома" и стримит окно тайлов.
+/// 2) Объекты: стримит чанки объектов вокруг игрока (через ObjectManager).
 [DefaultExecutionOrder(-200)]
 public class PoolManager : MonoBehaviour
 {
@@ -11,22 +13,35 @@ public class PoolManager : MonoBehaviour
     [SerializeField] Transform player;
     [SerializeField] PoolManagerMainTile mainTilePool;
 
-    [Header("Параметры окна")]
+    [Tooltip("Менеджер объектов: генерация и визуал объектов по чанкам")]
+    [SerializeField] ObjectManager objectManager;
+
+    [Header("Параметры окна (тайлы)")]
     [SerializeField, Min(1)] int radius = 40; // в клетках
-    [SerializeField] float cellSize = 1f;     // 1 клетка = 1 юнит
+    [SerializeField] float cellSize = 1f;   // 1 клетка = 1 юнит
+
+    [Header("Параметры стриминга объектов")]
+    [Tooltip("Размер чанка объектов, должен совпадать с ObjectManager.chunkSize")]
+    [SerializeField] int objectsChunkSize = 64;
+
+    [Tooltip("Радиус стриминга в чанках объектов")]
+    [SerializeField, Min(1)] int objectsChunkRadius = 2;
 
     // Внутреннее
     Vector2Int _lastCell;
     IBiomeService _biomes;
+    readonly HashSet<ulong> _activeObjectChunks = new(); // какие чанки объектов сейчас загружены
 
     void Reset()
     {
 #if UNITY_2023_1_OR_NEWER
         player = FindFirstObjectByType<PlayerMeleeController>()?.transform;
         mainTilePool = FindFirstObjectByType<PoolManagerMainTile>();
+        objectManager = FindFirstObjectByType<ObjectManager>();
 #else
-        player = FindObjectOfType<PlayerMeleeController>()?.transform;
+        player       = FindObjectOfType<PlayerMeleeController>()?.transform;
         mainTilePool = FindObjectOfType<PoolManagerMainTile>();
+        objectManager= FindObjectOfType<ObjectManager>();
 #endif
     }
 
@@ -34,14 +49,17 @@ public class PoolManager : MonoBehaviour
     {
         if (!player) Debug.LogWarning("[PoolManager] Player не назначен");
         if (!mainTilePool) Debug.LogError("[PoolManager] MainTilePool не назначен");
+        if (!objectManager) objectManager = FindObjectOfType<ObjectManager>();
+        if (objectManager && objectsChunkSize != objectManager.ChunkSize)
+            objectsChunkSize = objectManager.ChunkSize;  // подхватываем из ObjectManager
 
-        // Unity 6: безопасный поиск и ожидание готовности биомов
+        // Находим BiomeManager и ждём его готовности
 #if UNITY_2023_1_OR_NEWER
         _biomes = FindFirstObjectByType<BiomeManager>(FindObjectsInactive.Exclude);
 #else
         _biomes = FindObjectOfType<BiomeManager>();
 #endif
-        if (_biomes != null && _biomes.IsBiomesReady) BindColorAndRefresh();
+        if (_biomes != null && _biomes.IsBiomesReady) BindBiomeSpriteAndRefresh();
         else StartCoroutine(CoBindWhenReady());
     }
 
@@ -57,20 +75,21 @@ public class PoolManager : MonoBehaviour
 #endif
             yield return null;
         }
-        BindColorAndRefresh();
+        BindBiomeSpriteAndRefresh();
     }
 
-    void BindColorAndRefresh()
+    void BindBiomeSpriteAndRefresh()
     {
-        // ВАЖНО: BiomeManager ожидает КЛЕТКУ МИРА (центрированную), без сдвигов/flip.
         mainTilePool.SpriteFn = (Vector2Int cell) =>
         {
             var bt = _biomes.GetBiomeAtPosition(cell);
             return _biomes.GetBiomeSprite(bt);
         };
 
-        // Принудительный первый прогон, когда всё готово
-        ForceRefresh();
+        // очистим закэшированные до готовности биомов пустые чанки
+        if (objectManager) objectManager.ClearChunkCache();  // <-- добавь
+
+        ForceRefresh(); // он уже вызывает RefreshObjectChunks
     }
 
     void Start()
@@ -91,7 +110,8 @@ public class PoolManager : MonoBehaviour
         if (cell != _lastCell)
         {
             _lastCell = cell;
-            RefreshAround(cell);
+            RefreshAround(cell);          // тайлы
+            RefreshObjectChunks(cell);    // объекты
         }
 
         // Быстрый отладчик: показать биом под игроком
@@ -105,17 +125,26 @@ public class PoolManager : MonoBehaviour
     public void ForceRefresh()
     {
         if (!player || !mainTilePool) return;
+
+        // Сначала сброс тайлов
         mainTilePool.ClearAll();
+
+        // Вычисляем центр
         _lastCell = WorldToCell(player.position);
+
+        // Обновляем окно тайлов
         RefreshAround(_lastCell);
+
+        // Полный ресет стриминга объектов
+        UnloadAllObjectChunks();
+        RefreshObjectChunks(_lastCell);
     }
 
-    // ==== внутренняя логика ====
+
+    // ==== внутренняя логика (тайлы) ====
 
     Vector2Int WorldToCell(Vector3 world)
     {
-        // если есть смещение корня мира, вычти его здесь:
-        // world -= worldRoot.position;
         int x = Mathf.FloorToInt(world.x / cellSize);
         int y = Mathf.FloorToInt(world.y / cellSize);
         return new Vector2Int(x, y);
@@ -156,4 +185,63 @@ public class PoolManager : MonoBehaviour
         }
         foreach (var key in remove) mainTilePool.activeSquares.Remove(key);
     }
+
+    // ==== внутренняя логика (объекты) ====
+
+    void RefreshObjectChunks(Vector2Int centerCell)
+    {
+        if (!objectManager) return;
+
+        var bm = FindObjectOfType<BiomeManager>();
+        if (bm == null || !bm.IsBiomesReady) return;
+
+        // текущие координаты чанка по центру окна
+        int cx = centerCell.x >= 0 ? centerCell.x / objectsChunkSize
+                                   : (centerCell.x - (objectsChunkSize - 1)) / objectsChunkSize;
+        int cy = centerCell.y >= 0 ? centerCell.y / objectsChunkSize
+                                   : (centerCell.y - (objectsChunkSize - 1)) / objectsChunkSize;
+
+        // набор чанков, которые должны быть активны
+        var should = new HashSet<ulong>();
+        for (int dy = -objectsChunkRadius; dy <= objectsChunkRadius; dy++)
+            for (int dx = -objectsChunkRadius; dx <= objectsChunkRadius; dx++)
+            {
+                int x = cx + dx, y = cy + dy;
+                ulong key = ChunkKey(x, y);
+                should.Add(key);
+            }
+
+        // выгружаем лишние
+        foreach (var key in _activeObjectChunks)
+        {
+            if (should.Contains(key)) continue;
+            var cc = new ObjectManager.ChunkCoord((int)(key >> 32), (int)(key & 0xffffffff));
+            objectManager.UnloadChunkVisuals(cc);
+        }
+
+        // загружаем недостающие
+        foreach (var key in should)
+        {
+            if (_activeObjectChunks.Contains(key)) continue;
+            var cc = new ObjectManager.ChunkCoord((int)(key >> 32), (int)(key & 0xffffffff));
+            objectManager.LoadChunkVisuals(cc);
+        }
+
+        // фиксация активного набора
+        _activeObjectChunks.Clear();
+        foreach (var k in should) _activeObjectChunks.Add(k);
+    }
+
+    void UnloadAllObjectChunks()
+    {
+        if (!objectManager) { _activeObjectChunks.Clear(); return; }
+        foreach (var key in _activeObjectChunks)
+        {
+            var cc = new ObjectManager.ChunkCoord((int)(key >> 32), (int)(key & 0xffffffff));
+            objectManager.UnloadChunkVisuals(cc);
+        }
+        _activeObjectChunks.Clear();
+    }
+
+    static ulong ChunkKey(int x, int y) => ((ulong)(uint)x << 32) | (uint)y;
 }

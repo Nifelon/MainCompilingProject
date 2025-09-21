@@ -1,0 +1,495 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using Game.World.Map.Biome;   // BiomeType, IBiomeService / BiomeManager
+using Game.World.Objects;     // ObjectType, ObjectData, BiomeSpawnProfile, BiomeObjectRule, ObjectTags
+
+/// <summary>
+/// Генерирует объекты по чанкам на основе профилей биомов, выводит визуал через PoolManagerObjects,
+/// отдаёт API для стриминга из PoolManager (Load/UnloadChunkVisuals).
+/// </summary>
+[DefaultExecutionOrder(-225)]
+public class ObjectManager : MonoBehaviour
+{
+    // ========== CONFIG ==========
+    [Header("Generation")]
+    [Tooltip("Глобальный сид мира для детерминированной генерации.")]
+    [SerializeField] private int worldSeed = 12345;
+
+    [Tooltip("Размер чанка в клетках. ДОЛЖЕН совпадать с PoolManager.objectsChunkSize.")]
+    [SerializeField] private int chunkSize = 64;
+
+    [Tooltip("Профили спавна по биомам (по одному на биом).")]
+    [SerializeField] private List<BiomeSpawnProfile> biomeProfiles = new();
+
+    [Tooltip("База объектов (ScriptableObject'ы-«паспорта»).")]
+    [SerializeField] private List<ObjectData> objectDatabase = new();
+
+    [Header("Rendering / Pool")]
+    [Tooltip("Пул объектов (префабы). Если не назначить — найдётся автоматически в сцене.")]
+    [SerializeField] private PoolManagerObjects objectPool;
+
+    [Tooltip("Размер клетки в мировых юнитах. Совпадает с тайловой сеткой.")]
+    [SerializeField] private float cellSize = 1f;
+
+    [Tooltip("Включить сортировку по Y для SpriteRenderer (2D спрайтовая сортировка).")]
+    [SerializeField] private bool ySort = true;
+
+    [Tooltip("Множитель для order при Y-сортировке (чем больше — тем стабильнее порядок).")]
+    [SerializeField] private int ySortMul = 10;
+
+    // ========== DEPENDENCIES ==========
+    private IBiomeService _biomes;
+
+    // ========== RUNTIME STATE ==========
+    // Быстрый доступ
+    private readonly Dictionary<BiomeType, BiomeSpawnProfile> _profiles = new();
+    private readonly Dictionary<ObjectType, ObjectData> _objByType = new();
+
+    // Данные и визуал по чанкам
+    private readonly Dictionary<ulong, List<ObjectInstanceData>> _chunkData = new();
+    private readonly Dictionary<ulong, List<GameObject>> _chunkVisual = new();
+
+    // Дельты состояния (сбор/разрушение и т.п.)
+    private readonly Dictionary<ulong, ObjectState> _stateDiffs = new();
+
+    // ==================== PUBLIC (для PoolManager) ====================
+
+    public int ChunkSize => chunkSize;
+
+    public readonly struct ChunkCoord
+    {
+        public readonly int x, y;
+        public ChunkCoord(int x, int y) { this.x = x; this.y = y; }
+    }
+
+    public Vector2Int ChunkOrigin(ChunkCoord c) => new(c.x * chunkSize, c.y * chunkSize);
+    public ulong ChunkKey(ChunkCoord c) => ((ulong)(uint)c.x << 32) | (uint)c.y;
+
+    /// <summary>Ленивая генерация: вернёт готовые инстансы или сгенерирует заново.</summary>
+
+    /// <summary>Создать/взять из пула визуал объектов чанка.</summary>
+    public void LoadChunkVisuals(ChunkCoord cc)
+    {
+        var key = ChunkKey(cc);
+        if (_chunkVisual.ContainsKey(key)) return;
+
+        var data = GetOrGenerateChunk(cc);
+        var list = new List<GameObject>(data.Count);
+        foreach (var d in data)
+        {
+            if (IsDestroyed(d.id)) continue;
+
+            var go = objectPool ? objectPool.Get(d.type) : CreateAdhocGO(d.type);
+            ApplyVisual(go, d);
+            list.Add(go);
+        }
+        _chunkVisual[key] = list;
+    }
+
+    /// <summary>Вернуть визуал объектов чанка в пул.</summary>
+    public void UnloadChunkVisuals(ChunkCoord cc)
+    {
+        var key = ChunkKey(cc);
+        if (!_chunkVisual.TryGetValue(key, out var list)) return;
+
+        foreach (var go in list)
+        {
+            if (!go) continue;
+            if (objectPool) objectPool.Release(go);
+            else Destroy(go);
+        }
+        list.Clear();
+        _chunkVisual.Remove(key);
+    }
+
+    // ==================== UNITY LIFECYCLE ====================
+
+    void Awake()
+    {
+        // Biomes
+#if UNITY_2023_1_OR_NEWER
+        _biomes = FindFirstObjectByType<BiomeManager>(FindObjectsInactive.Exclude);
+#else
+        _biomes = FindObjectOfType<BiomeManager>();
+#endif
+        if (_biomes == null)
+            Debug.LogError("[ObjectManager] BiomeManager не найден в сцене.");
+
+        // Pool
+        if (!objectPool)
+#if UNITY_2023_1_OR_NEWER
+            objectPool = FindFirstObjectByType<PoolManagerObjects>(FindObjectsInactive.Exclude);
+#else
+            objectPool = FindObjectOfType<PoolManagerObjects>();
+#endif
+        if (!objectPool)
+            Debug.LogWarning("[ObjectManager] PoolManagerObjects не найден. Будет использоваться Instantiate/Destroy (на альфе ок).");
+
+        // Build maps
+        _profiles.Clear();
+        foreach (var p in biomeProfiles)
+            if (p) _profiles[p.biome] = p;
+
+        _objByType.Clear();
+        foreach (var od in objectDatabase)
+            if (od) _objByType[od.type] = od;
+    }
+
+    // ==================== GENERATION ====================
+
+    private List<ObjectInstanceData> GenerateChunk(ChunkCoord cc)
+    {
+        var result = new List<ObjectInstanceData>(128);
+        var origin = ChunkOrigin(cc);
+        var key = ChunkKey(cc);
+
+        // Набор занятых клеток (любыми объектами) в рамках чанка — чтобы не пересекать футпринты
+        var occupied = new HashSet<Vector2Int>();
+
+        // Проходим все профили биомов и накладываем их правила на чанк
+        foreach (var kv in _profiles)
+        {
+            var biome = kv.Key;
+            var prof = kv.Value;
+            float densMul = Mathf.Max(0.01f, prof.densityMultiplier);
+
+            foreach (var rule in prof.rules)
+            {
+                int target = Mathf.RoundToInt(rule.targetPerChunk * densMul);
+                if (target <= 0) continue;
+
+                var rng = new System.Random(Hash(worldSeed, cc.x, cc.y, (int)rule.objectType));
+
+                switch (rule.mode)
+                {
+                    case SpawnMode.BlueNoise:
+                        PlaceBlueNoise(biome, rule, origin, target, rng, occupied, result, key);
+                        break;
+
+                    case SpawnMode.Clustered:
+                        PlaceClustered(biome, rule, origin, target, rng, occupied, result, key);
+                        break;
+
+                    default: // Uniform
+                        PlaceUniform(biome, rule, origin, target, rng, occupied, result, key);
+                        break;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private void PlaceUniform(BiomeType biome, BiomeObjectRule rule, Vector2Int origin, int target,
+                              System.Random rng, HashSet<Vector2Int> occ, List<ObjectInstanceData> outList, ulong chunkKey)
+    {
+        int triesMax = target * 8;
+        for (int i = 0, placed = 0; i < triesMax && placed < target; i++)
+        {
+            var local = new Vector2Int(rng.Next(0, chunkSize), rng.Next(0, chunkSize));
+            var cell = origin + local;
+            if (!IsAllowed(biome, rule, cell, occ)) continue;
+
+            var inst = MakeInstance(rule, cell, rng, chunkKey, outList.Count);
+            Occupy(_objByType[rule.objectType].footprint, cell, occ);
+            outList.Add(inst); placed++;
+        }
+    }
+
+    private void PlaceClustered(BiomeType biome, BiomeObjectRule rule, Vector2Int origin, int target,
+                                System.Random rng, HashSet<Vector2Int> occ, List<ObjectInstanceData> outList, ulong chunkKey)
+    {
+        int avgSat = Mathf.Max(1, (rule.clusterCountRange.x + rule.clusterCountRange.y) / 2);
+        int clusters = Mathf.Max(1, target / Mathf.Max(1, avgSat));
+
+        for (int c = 0; c < clusters && outList.Count < target; c++)
+        {
+            if (!TryPickCell(biome, rule, origin, rng, occ, out var seed)) continue;
+
+            var inst = MakeInstance(rule, seed, rng, chunkKey, outList.Count);
+            Occupy(_objByType[rule.objectType].footprint, seed, occ);
+            outList.Add(inst);
+
+            int satellites = rng.Next(rule.clusterCountRange.x, rule.clusterCountRange.y + 1);
+            for (int s = 0; s < satellites && outList.Count < target; s++)
+            {
+                var near = seed + new Vector2Int(rng.Next(-3, 4), rng.Next(-3, 4));
+                if (!IsAllowed(biome, rule, near, occ, noiseGate: false)) continue;
+
+                var sat = MakeInstance(rule, near, rng, chunkKey, outList.Count);
+                Occupy(_objByType[rule.objectType].footprint, near, occ);
+                outList.Add(sat);
+            }
+        }
+    }
+
+    private void PlaceBlueNoise(BiomeType biome, BiomeObjectRule rule, Vector2Int origin, int target,
+                                System.Random rng, HashSet<Vector2Int> occ, List<ObjectInstanceData> outList, ulong chunkKey)
+    {
+        int step = Mathf.Max(1, Mathf.RoundToInt(rule.minDistanceSameType));
+        for (int x = 0; x < chunkSize; x += step)
+            for (int y = 0; y < chunkSize; y += step)
+            {
+                if (outList.Count >= target) return;
+
+                var jitter = new Vector2Int(rng.Next(0, step), rng.Next(0, step));
+                var cell = origin + new Vector2Int(Mathf.Min(x + jitter.x, chunkSize - 1),
+                                                     Mathf.Min(y + jitter.y, chunkSize - 1));
+
+                if (!IsAllowed(biome, rule, cell, occ)) continue;
+
+                var inst = MakeInstance(rule, cell, rng, chunkKey, outList.Count);
+                Occupy(_objByType[rule.objectType].footprint, cell, occ);
+                outList.Add(inst);
+            }
+    }
+
+    private bool TryPickCell(BiomeType biome, BiomeObjectRule rule, Vector2Int origin, System.Random rng,
+                             HashSet<Vector2Int> occ, out Vector2Int cell)
+    {
+        for (int i = 0; i < 32; i++)
+        {
+            var local = new Vector2Int(rng.Next(0, chunkSize), rng.Next(0, chunkSize));
+            var c = origin + local;
+            if (IsAllowed(biome, rule, c, occ)) { cell = c; return true; }
+        }
+        cell = default; return false;
+    }
+
+    private bool IsAllowed(BiomeType neededBiome, BiomeObjectRule rule, Vector2Int cell, HashSet<Vector2Int> occ, bool noiseGate = true)
+    {
+        // 1) биом клетки должен совпадать с профилем
+        if (_biomes == null || _biomes.GetBiomeAtPosition(cell) != neededBiome) return false;
+
+        // 2) шумовая маска (Perlin-gate)
+        if (noiseGate && rule.useNoiseGate)
+        {
+            float n = Mathf.PerlinNoise(cell.x * rule.noiseScale, cell.y * rule.noiseScale);
+            if (n < rule.noiseThreshold) return false;
+        }
+
+        // 3) футпринт влезает и клетки не заняты другими объектами
+        if (!_objByType.TryGetValue(rule.objectType, out var od)) return false;
+
+        for (int x = 0; x < od.footprint.x; x++)
+            for (int y = 0; y < od.footprint.y; y++)
+            {
+                var c = new Vector2Int(cell.x + x, cell.y + y);
+                if (occ.Contains(c)) return false;
+            }
+
+        // 4) «аура» дистанций от уже занятых клеток
+        if (rule.avoidOtherObjects)
+        {
+            int r = Mathf.CeilToInt(Mathf.Max(rule.minDistanceAny, rule.minDistanceSameType));
+            for (int dx = -r; dx <= r; dx++)
+                for (int dy = -r; dy <= r; dy++)
+                    if (occ.Contains(new Vector2Int(cell.x + dx, cell.y + dy))) return false;
+        }
+
+        // 5) Частный кейс: Пальмы в Desert — только рядом с Oasis (эмуляция воды)
+        if (rule.objectType == ObjectType.Palm && neededBiome == BiomeType.Desert)
+            if (!IsNearBiome(cell, BiomeType.Savanna, 3)) return false;
+
+        return true;
+    }
+
+    private bool IsNearBiome(Vector2Int cell, BiomeType target, int radius)
+    {
+        for (int dx = -radius; dx <= radius; dx++)
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                var c = new Vector2Int(cell.x + dx, cell.y + dy);
+                if (_biomes.GetBiomeAtPosition(c) == target) return true;
+            }
+        return false;
+    }
+
+    private ObjectInstanceData MakeInstance(BiomeObjectRule rule, Vector2Int cell, System.Random rng, ulong chunkKey, int idx)
+    {
+        var data = _objByType[rule.objectType];
+        int maxV = (data.spriteVariants != null && data.spriteVariants.Length > 0) ? data.spriteVariants.Length : 1;
+        int vIdx = Mathf.Clamp(rule.variants > 1 ? rng.Next(0, rule.variants) : 0, 0, Mathf.Max(0, maxV - 1));
+
+        return new ObjectInstanceData
+        {
+            id = ((ulong)(uint)idx) | (chunkKey << 32),
+            type = rule.objectType,
+            cell = cell,
+            variantIndex = vIdx,
+            worldPos = CellToWorld(cell),
+            footprint = data.footprint
+        };
+    }
+
+    // ==================== VISUAL ====================
+
+    private void ApplyVisual(GameObject go, ObjectInstanceData inst)
+    {
+        var data = _objByType[inst.type];
+
+        // позиция
+        go.transform.position = new Vector3(inst.worldPos.x, inst.worldPos.y, 0f) + (Vector3)data.pivotOffsetWorld;
+        if ((data.tags & ObjectTags.HighSprite) != 0)
+            go.transform.position += Vector3.up * (data.visualHeightUnits * cellSize);
+
+        // спрайт
+        var tag = go.GetComponent<PooledObjectTag>();
+        var sr = (tag != null && tag.SR) ? tag.SR : go.GetComponentInChildren<SpriteRenderer>();
+        if (sr && data.spriteVariants != null && data.spriteVariants.Length > 0)
+            sr.sprite = data.spriteVariants[Mathf.Clamp(inst.variantIndex, 0, data.spriteVariants.Length - 1)];
+
+        // сортировка по Y (для 2D)
+        if (ySort && sr) sr.sortingOrder = -(int)Mathf.Round(go.transform.position.y * ySortMul);
+    }
+
+    // ==================== GAMEPLAY (сбор/разрушение) ====================
+
+    private bool IsDestroyed(ulong id)
+        => _stateDiffs.TryGetValue(id, out var st) && st.isDestroyed;
+
+    public void MarkDestroyed(ulong id)
+    {
+        if (!_stateDiffs.TryGetValue(id, out var st)) st = new ObjectState();
+        st.isDestroyed = true;
+        _stateDiffs[id] = st;
+    }
+
+    /// <summary>Сбор урожая (BerryBush -> Bush). Вернёт true, если сбор успешен.</summary>
+    public bool TryHarvest(ulong id, System.Random rng = null)
+    {
+        ulong chunkKey = id >> 32;
+        int index = (int)(id & 0xffffffff);
+
+        if (!_chunkData.TryGetValue(chunkKey, out var list)) return false;
+        if (index < 0 || index >= list.Count) return false;
+
+        var inst = list[index];
+        if (!_objByType.TryGetValue(inst.type, out var data) || !data.harvest.harvestable) return false;
+
+        // Выдача дропа (если настроен)
+        rng ??= new System.Random(unchecked((int)id));
+        if (data.harvest.harvestDrops != null)
+        {
+            foreach (var drop in data.harvest.harvestDrops)
+            {
+                if (UnityEngine.Random.value <= drop.chance)
+                {
+                    int n = UnityEngine.Random.Range(drop.minCount, drop.maxCount + 1);
+                    // Подключи свою систему инвентаря:
+                    // Inventory.Give(drop.itemId, n);
+                }
+            }
+        }
+
+        // Изменение состояния и визуала
+        if (data.harvest.destroyOnHarvest)
+        {
+            MarkDestroyed(id);
+            if (_chunkVisual.TryGetValue(chunkKey, out var gos) && index < gos.Count && gos[index] != null)
+                if (objectPool) objectPool.Release(gos[index]); else Destroy(gos[index]);
+        }
+        else
+        {
+            inst.type = data.harvest.transformToType; // BerryBush -> Bush
+            list[index] = inst;
+
+            if (_chunkVisual.TryGetValue(chunkKey, out var gos) && index < gos.Count && gos[index] != null)
+                ApplyVisual(gos[index], inst);
+        }
+
+        return true;
+    }
+
+    // ==================== HELPERS ====================
+
+    private Vector2 CellToWorld(Vector2Int cell) => new(cell.x * cellSize, cell.y * cellSize);
+
+    private void Occupy(Vector2Int size, Vector2Int anchor, HashSet<Vector2Int> occ)
+    {
+        for (int x = 0; x < size.x; x++)
+            for (int y = 0; y < size.y; y++)
+                occ.Add(new Vector2Int(anchor.x + x, anchor.y + y));
+    }
+
+    private static int Hash(int seed, int x, int y, int salt)
+    {
+        unchecked
+        {
+            int h = seed;
+            h ^= x * 73856093;
+            h ^= y * 19349663;
+            h ^= salt * 83492791;
+            h = (h << 13) ^ h;
+            return h;
+        }
+    }
+    // Фолбэк, если objectPool не назначен (debug/альфа)
+    private Transform _adhocRoot;
+
+    private GameObject CreateAdhocGO(ObjectType type)
+    {
+        if (_adhocRoot == null)
+        {
+            _adhocRoot = new GameObject("Objects_Adhoc").transform;
+            _adhocRoot.SetParent(transform, false);
+        }
+
+        var go = new GameObject($"adhoc_{type}");
+        go.transform.SetParent(_adhocRoot, false);
+
+        // базовый визуал
+        var sr = go.AddComponent<SpriteRenderer>();
+
+        // кэш, чтобы ApplyVisual не искал компоненты
+        var tag = go.AddComponent<PooledObjectTag>();
+        tag.Type = type;
+        tag.SR = sr;
+
+        return go;
+    }
+    // ObjectManager.cs (в классе)
+    private bool BiomesReady =>
+        _biomes != null && (_biomes as BiomeManager)?.IsBiomesReady == true;
+
+    public List<ObjectInstanceData> GetOrGenerateChunk(ChunkCoord cc)
+    {
+        var key = ChunkKey(cc);
+        if (_chunkData.TryGetValue(key, out var list)) return list;
+
+        // важно: не кэшируем чанк, пока биомы не готовы
+        if (!BiomesReady) return new List<ObjectInstanceData>();
+
+        list = GenerateChunk(cc);
+        _chunkData[key] = list;
+        return list;
+    }
+    public void ClearChunkCache()
+    {
+        // выгрузить визуал
+        foreach (var kv in _chunkVisual)
+            foreach (var go in kv.Value)
+                if (go) { if (objectPool) objectPool.Release(go); else Destroy(go); }
+        _chunkVisual.Clear();
+        _chunkData.Clear();
+        _stateDiffs.Clear();
+    }
+}
+
+// ==================== DATA STRUCTS ====================
+
+public struct ObjectInstanceData
+{
+    public ulong id;
+    public ObjectType type;
+    public Vector2Int cell;
+    public int variantIndex;
+    public Vector2 worldPos;
+    public Vector2Int footprint;
+}
+
+public struct ObjectState
+{
+    public bool isDestroyed;
+}
