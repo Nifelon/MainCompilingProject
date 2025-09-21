@@ -63,10 +63,10 @@ public class PoolManager : MonoBehaviour
     void BindColorAndRefresh()
     {
         // ВАЖНО: BiomeManager ожидает КЛЕТКУ МИРА (центрированную), без сдвигов/flip.
-        mainTilePool.ColorFn = (Vector2Int cell) =>
+        mainTilePool.SpriteFn = (Vector2Int cell) =>
         {
             var bt = _biomes.GetBiomeAtPosition(cell);
-            return _biomes.GetBiomeColor(bt);
+            return _biomes.GetBiomeSprite(bt);
         };
 
         // Принудительный первый прогон, когда всё готово

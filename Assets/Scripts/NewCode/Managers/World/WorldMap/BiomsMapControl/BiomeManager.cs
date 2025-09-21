@@ -229,6 +229,11 @@ namespace Game.World.Map.Biome
         {
             return _biomeData.TryGetValue(type, out var d) ? d.ColorMap : Color.magenta;
         }
+        public Sprite GetBiomeSprite(BiomeType type)
+        {
+            _biomeData.TryGetValue(type, out var d);
+            return d.SpriteMap;
+        }
 
         public BiomeType[,] Grid => _grid; // для временной карты
     }

@@ -16,3 +16,4 @@ MonoBehaviour:
   BiomeName: SnowyForest
   ClimateType: 1
   ColorMap: {r: 0.5882353, g: 1, b: 0.64705884, a: 1}
+  SpriteMap: {fileID: -2878979835515907055, guid: 12f35af626b8fc643b6a0d233ad8355a, type: 3}

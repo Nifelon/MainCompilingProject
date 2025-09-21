@@ -8,6 +8,7 @@ public class BiomeData : ScriptableObject
     public string BiomeName;
     public ClimateZoneType ClimateType;
     public Color ColorMap;
+    public Sprite SpriteMap;
     //[Header("Климатические параметры")]
     //public float TemperatureMin;       
     //public float TemperatureMax;

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Savanna
   m_EditorClassIdentifier: 
   Type: 5
-  BiomeName: "\u0421\u0430\u0432\u0430\u043D\u043D\u0430"
+  BiomeName: "\u041E\u0430\u0437\u0438\u0441"
   ClimateType: 3
-  ColorMap: {r: 1, g: 0.6, b: 0, a: 1}
+  ColorMap: {r: 0.37673548, g: 0.9622642, b: 0.4598966, a: 1}
+  SpriteMap: {fileID: -6770739464122911365, guid: 9bd87456d8d8ba54e9db921502baea35, type: 3}

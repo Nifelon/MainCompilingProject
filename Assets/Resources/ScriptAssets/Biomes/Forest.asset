@@ -16,3 +16,4 @@ MonoBehaviour:
   BiomeName: "\u041B\u0435\u0441"
   ClimateType: 2
   ColorMap: {r: 0, g: 0.5019608, b: 0, a: 1}
+  SpriteMap: {fileID: -6770739464122911365, guid: 9bd87456d8d8ba54e9db921502baea35, type: 3}

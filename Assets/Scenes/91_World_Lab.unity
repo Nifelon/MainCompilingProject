@@ -486,8 +486,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tilePrefab: {fileID: 5440261197981543740, guid: 506e424a43873554c8ce5ec6a3eb6b21, type: 3}
   tilesRoot: {fileID: 989713458}
-  poolCount: 8000
-  hardCap: 20000
+  poolCount: 3000
 --- !u!114 &391172008
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -500,9 +499,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a0f1237abd589c94f940c49574f38e30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  player: {fileID: 1687318613}
+  player: {fileID: 1772076462}
   mainTilePool: {fileID: 391172007}
-  radius: 40
+  radius: 55
   cellSize: 1
 --- !u!4 &391172009
 Transform:
@@ -1964,12 +1963,11 @@ Transform:
   m_GameObject: {fileID: 1687318612}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -10}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 1772076462}
-  m_Father: {fileID: 0}
+  m_Children: []
+  m_Father: {fileID: 1772076462}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1754160285
 GameObject:
@@ -2063,6 +2061,7 @@ GameObject:
   - component: {fileID: 1772076461}
   - component: {fileID: 1772076460}
   - component: {fileID: 1772076463}
+  - component: {fileID: 1772076464}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -2138,11 +2137,12 @@ Transform:
   m_GameObject: {fileID: 1772076459}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1687318613}
+  m_Children:
+  - {fileID: 1687318613}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1772076463
 MonoBehaviour:
@@ -2188,6 +2188,32 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!114 &1772076464
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1772076459}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bdd5155c7b66c2a49b39be8e36321f8a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveSpeed: 10
+  fastMul: 2
+  dragMul: 1
+  zoomMin: 3
+  zoomMax: 30
+  zoomStep: 3
+  zoomSmooth: 10
+  clampToBounds: 0
+  worldBounds:
+    serializedVersion: 2
+    x: -200
+    y: -200
+    width: 400
+    height: 400
 --- !u!1 &1962276544
 GameObject:
   m_ObjectHideFlags: 0
@@ -2274,7 +2300,7 @@ SceneRoots:
   - {fileID: 186056080}
   - {fileID: 391172009}
   - {fileID: 797435119}
-  - {fileID: 1687318613}
+  - {fileID: 1772076462}
   - {fileID: 989713458}
   - {fileID: 1259358874}
   - {fileID: 1452138679}

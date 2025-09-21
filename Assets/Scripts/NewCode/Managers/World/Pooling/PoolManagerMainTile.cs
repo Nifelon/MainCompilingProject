@@ -10,10 +10,10 @@ public class PoolManagerMainTile : MonoBehaviour
 
     [Header("Размер пула")]
     [SerializeField] int poolCount = 8000;
-    [SerializeField] int hardCap = 20000;
+    //[SerializeField] int hardCap = 20000;
 
     // Делегат окраски тайла: клетка мира -> цвет
-    public System.Func<Vector2Int, Color> ColorFn;
+    public System.Func<Vector2Int, Sprite> SpriteFn;
 
     // Активные тайлы и очередь свободных
     public readonly Dictionary<Vector2Int, GameObject> activeSquares = new();
@@ -56,14 +56,14 @@ public class PoolManagerMainTile : MonoBehaviour
         go.transform.SetParent(tilesRoot, false);
         go.transform.localPosition = position;
 
-        if (ColorFn != null)
+        if (SpriteFn != null)
         {
-            var col = ColorFn(cell);
-            if (pt.sr) pt.sr.color = col;
+            var col = SpriteFn(cell);
+            if (pt.sr) pt.sr.sprite = col;
             else
             {
                 var sr = go.GetComponentInChildren<SpriteRenderer>(true);
-                if (sr) sr.color = col;
+                if (sr) sr.sprite = col;
             }
         }
 
