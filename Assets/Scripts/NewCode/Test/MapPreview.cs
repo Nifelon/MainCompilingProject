@@ -20,7 +20,7 @@ namespace Game.UI
         private IBiomeService _biomes;
 
         private void Awake() => _img = GetComponent<RawImage>();
-
+        public void Close_OpenWindow() =>gameObject.SetActive(!gameObject.activeSelf);
         public void Initialize(WorldContext ctx)
         {
             _ctx = ctx;

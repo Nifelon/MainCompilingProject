@@ -125,11 +125,8 @@ public class WorldManager : MonoBehaviour
         }
         return true;
     }
-
-#if UNITY_EDITOR
     private void OnValidate()
     {
         sizeMap = new Vector2Int(Mathf.Max(1, sizeMap.x), Mathf.Max(1, sizeMap.y));
     }
-#endif
 }

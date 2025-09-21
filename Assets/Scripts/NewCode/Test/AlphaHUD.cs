@@ -17,6 +17,7 @@ namespace Game.UI
         [SerializeField] private Button rebuildNewBtn;
         [SerializeField] private Button savePngBtn;
         [SerializeField] private Button dsCycleBtn;
+        [SerializeField] private Button Close_OpenBtn;
         [SerializeField] private Text dsCycleLabel;
         [SerializeField] private MapPreview mapPreview;
 
@@ -50,6 +51,7 @@ namespace Game.UI
             if (rebuildNewBtn) rebuildNewBtn.onClick.AddListener(RebuildNew);
             if (savePngBtn) savePngBtn.onClick.AddListener(SavePng);
             if (dsCycleBtn) dsCycleBtn.onClick.AddListener(CycleDownscale);
+            if (Close_OpenBtn) Close_OpenBtn.onClick.AddListener(сlose_OpenWindow);
         }
 
         private void Start()
@@ -118,5 +120,6 @@ namespace Game.UI
             if (mapPreview != null) mapPreview.SetDownscale(ds);
             RefreshLabels();
         }
+        void сlose_OpenWindow() => mapPreview?.Close_OpenWindow();
     }
 }
