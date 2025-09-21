@@ -26,7 +26,7 @@ public class PoolManager : MonoBehaviour
 
     [Tooltip("Радиус стриминга в чанках объектов")]
     [SerializeField, Min(1)] int objectsChunkRadius = 2;
-
+    int _chunkLoadRadius, _chunkUnloadRadius;
     // Внутреннее
     Vector2Int _lastCell;
     IBiomeService _biomes;
@@ -34,15 +34,9 @@ public class PoolManager : MonoBehaviour
 
     void Reset()
     {
-#if UNITY_2023_1_OR_NEWER
         player = FindFirstObjectByType<PlayerMeleeController>()?.transform;
         mainTilePool = FindFirstObjectByType<PoolManagerMainTile>();
         objectManager = FindFirstObjectByType<ObjectManager>();
-#else
-        player       = FindObjectOfType<PlayerMeleeController>()?.transform;
-        mainTilePool = FindObjectOfType<PoolManagerMainTile>();
-        objectManager= FindObjectOfType<ObjectManager>();
-#endif
     }
 
     void Awake()
@@ -54,13 +48,12 @@ public class PoolManager : MonoBehaviour
             objectsChunkSize = objectManager.ChunkSize;  // подхватываем из ObjectManager
 
         // Находим BiomeManager и ждём его готовности
-#if UNITY_2023_1_OR_NEWER
         _biomes = FindFirstObjectByType<BiomeManager>(FindObjectsInactive.Exclude);
-#else
-        _biomes = FindObjectOfType<BiomeManager>();
-#endif
         if (_biomes != null && _biomes.IsBiomesReady) BindBiomeSpriteAndRefresh();
         else StartCoroutine(CoBindWhenReady());
+        if (objectManager && objectsChunkSize != objectManager.ChunkSize)
+            objectsChunkSize = objectManager.ChunkSize;
+        RecomputeChunkRadii();
     }
 
     System.Collections.IEnumerator CoBindWhenReady()
@@ -68,11 +61,7 @@ public class PoolManager : MonoBehaviour
         // ждём, пока BiomeManager появится и отметится готовым
         while (_biomes == null || !_biomes.IsBiomesReady)
         {
-#if UNITY_2023_1_OR_NEWER
             if (_biomes == null) _biomes = FindFirstObjectByType<BiomeManager>(FindObjectsInactive.Exclude);
-#else
-            if (_biomes == null) _biomes = FindObjectOfType<BiomeManager>();
-#endif
             yield return null;
         }
         BindBiomeSpriteAndRefresh();
@@ -241,6 +230,11 @@ public class PoolManager : MonoBehaviour
             objectManager.UnloadChunkVisuals(cc);
         }
         _activeObjectChunks.Clear();
+    }
+    void RecomputeChunkRadii()
+    {
+        _chunkLoadRadius = Mathf.CeilToInt(radius / (float)objectsChunkSize);
+        _chunkUnloadRadius = Mathf.CeilToInt(Mathf.RoundToInt(radius * 1.5f) / (float)objectsChunkSize);
     }
 
     static ulong ChunkKey(int x, int y) => ((ulong)(uint)x << 32) | (uint)y;

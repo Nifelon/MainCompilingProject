@@ -37,6 +37,14 @@ public class ObjectManager : MonoBehaviour
 
     [Tooltip("ћножитель дл€ order при Y-сортировке (чем больше Ч тем стабильнее пор€док).")]
     [SerializeField] private int ySortMul = 10;
+    // === persistence ===
+    private readonly Dictionary<ulong, ObjectType[]> _origTypes = new(); // snapshot типов при генерации
+    [SerializeField] private string saveFolder = "chunks/objects";        // внутри persistentDataPath
+
+    // === render/sorting (если ещЄ нет)
+    [SerializeField] private string objectsSortingLayer = "WorldObjects";
+    [SerializeField] private int objectsOrderOffset = 0;
+    private int _objLayerID;
 
     // ========== DEPENDENCIES ==========
     private IBiomeService _biomes;
@@ -101,6 +109,7 @@ public class ObjectManager : MonoBehaviour
         }
         list.Clear();
         _chunkVisual.Remove(key);
+        SaveChunkDiffs(key);
     }
 
     // ==================== UNITY LIFECYCLE ====================
@@ -108,21 +117,13 @@ public class ObjectManager : MonoBehaviour
     void Awake()
     {
         // Biomes
-#if UNITY_2023_1_OR_NEWER
         _biomes = FindFirstObjectByType<BiomeManager>(FindObjectsInactive.Exclude);
-#else
-        _biomes = FindObjectOfType<BiomeManager>();
-#endif
         if (_biomes == null)
             Debug.LogError("[ObjectManager] BiomeManager не найден в сцене.");
 
         // Pool
         if (!objectPool)
-#if UNITY_2023_1_OR_NEWER
             objectPool = FindFirstObjectByType<PoolManagerObjects>(FindObjectsInactive.Exclude);
-#else
-            objectPool = FindObjectOfType<PoolManagerObjects>();
-#endif
         if (!objectPool)
             Debug.LogWarning("[ObjectManager] PoolManagerObjects не найден. Ѕудет использоватьс€ Instantiate/Destroy (на альфе ок).");
 
@@ -134,6 +135,9 @@ public class ObjectManager : MonoBehaviour
         _objByType.Clear();
         foreach (var od in objectDatabase)
             if (od) _objByType[od.type] = od;
+        _objLayerID = SortingLayer.NameToID(objectsSortingLayer);
+        var dir = System.IO.Path.Combine(Application.persistentDataPath, saveFolder);
+        if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
     }
 
     // ==================== GENERATION ====================
@@ -177,7 +181,8 @@ public class ObjectManager : MonoBehaviour
                 }
             }
         }
-
+        _origTypes[ChunkKey(cc)] = result.ConvertAll(r => r.type).ToArray();
+        ApplySavedDiffs(ChunkKey(cc), result);
         return result;
     }
 
@@ -334,14 +339,47 @@ public class ObjectManager : MonoBehaviour
         if ((data.tags & ObjectTags.HighSprite) != 0)
             go.transform.position += Vector3.up * (data.visualHeightUnits * cellSize);
 
-        // спрайт
-        var tag = go.GetComponent<PooledObjectTag>();
-        var sr = (tag != null && tag.SR) ? tag.SR : go.GetComponentInChildren<SpriteRenderer>();
-        if (sr && data.spriteVariants != null && data.spriteVariants.Length > 0)
-            sr.sprite = data.spriteVariants[Mathf.Clamp(inst.variantIndex, 0, data.spriteVariants.Length - 1)];
+        // ссылки
+        var wref = go.GetComponent<WorldObjectRef>() ?? go.AddComponent<WorldObjectRef>();
+        wref.id = inst.id; wref.type = inst.type;
 
-        // сортировка по Y (дл€ 2D)
-        if (ySort && sr) sr.sortingOrder = -(int)Mathf.Round(go.transform.position.y * ySortMul);
+        var tag = go.GetComponent<PooledObjectTag>();
+        var sr = (tag && tag.SR) ? tag.SR : go.GetComponentInChildren<SpriteRenderer>();
+        if (sr)
+        {
+            if (data.spriteVariants != null && data.spriteVariants.Length > 0)
+                sr.sprite = data.spriteVariants[Mathf.Clamp(inst.variantIndex, 0, data.spriteVariants.Length - 1)];
+            if (sr.sortingLayerID != _objLayerID) sr.sortingLayerID = _objLayerID;
+            sr.sortingOrder = objectsOrderOffset + (ySort ? -(int)Mathf.Round(go.transform.position.y * ySortMul) : 0);
+        }
+
+        // интерактив дл€ сборных (€годных)
+        bool harvestable = data.harvest.harvestable;
+        if (harvestable)
+        {
+            var cc = go.GetComponent<CircleCollider2D>() ?? go.AddComponent<CircleCollider2D>();
+            cc.isTrigger = true;
+            cc.radius = 0.45f * cellSize;
+            go.layer = LayerMask.NameToLayer("Interactable"); // создай слой в проекте
+        }
+
+        // коллизии дл€ непроходимых
+        bool blocking = data.movementModifier <= 0f || (data.tags & ObjectTags.StaticObstacle) != 0
+                        || inst.type == ObjectType.Rock || inst.type == ObjectType.Oak
+                        || inst.type == ObjectType.Spruce || inst.type == ObjectType.Palm;
+        var bc = go.GetComponent<BoxCollider2D>();
+        if (blocking)
+        {
+            if (!bc) bc = go.AddComponent<BoxCollider2D>();
+            bc.isTrigger = false;
+            bc.size = new Vector2(Mathf.Max(0.9f, data.footprint.x) * cellSize,
+                                  Mathf.Max(0.9f, data.footprint.y) * cellSize);
+            bc.offset = new Vector2(bc.size.x * 0.5f, bc.size.y * 0.5f);
+        }
+        else
+        {
+            if (bc) Destroy(bc);
+        }
     }
 
     // ==================== GAMEPLAY (сбор/разрушение) ====================
@@ -475,6 +513,73 @@ public class ObjectManager : MonoBehaviour
         _chunkData.Clear();
         _stateDiffs.Clear();
     }
+    [Serializable] class ChunkDelta { public int i; public bool d; public int t = -1; }
+    [Serializable] class ChunkSave { public int v = 1; public List<ChunkDelta> deltas = new(); }
+
+    private string PathFor(ulong key)
+    {
+        int x = (int)(key >> 32); int y = (int)(key & 0xffffffff);
+        return System.IO.Path.Combine(Application.persistentDataPath, saveFolder, $"{x}_{y}.json");
+    }
+
+    private void ApplySavedDiffs(ulong key, List<ObjectInstanceData> list)
+    {
+        var path = PathFor(key);
+        if (!System.IO.File.Exists(path)) return;
+        var json = System.IO.File.ReadAllText(path);
+        var save = JsonUtility.FromJson<ChunkSave>(json);
+        if (save?.deltas == null) return;
+
+        foreach (var d in save.deltas)
+        {
+            if (d.i < 0 || d.i >= list.Count) continue;
+            var id = ((ulong)(uint)d.i) | (key << 32);
+            if (d.d) { MarkDestroyed(id); continue; }
+            if (d.t >= 0)
+            {
+                list[d.i] = new ObjectInstanceData
+                {
+                    id = list[d.i].id,
+                    cell = list[d.i].cell,
+                    worldPos = list[d.i].worldPos,
+                    footprint = list[d.i].footprint,
+                    variantIndex = list[d.i].variantIndex,
+                    type = (ObjectType)d.t
+                };
+            }
+        }
+    }
+
+    public void SaveChunkDiffs(ulong key)
+    {
+        if (!_chunkData.TryGetValue(key, out var list)) return;
+        var deltas = new List<ChunkDelta>();
+        var orig = _origTypes.TryGetValue(key, out var arr) ? arr : null;
+
+        for (int i = 0; i < list.Count; i++)
+        {
+            var id = ((ulong)(uint)i) | (key << 32);
+            bool destroyed = IsDestroyed(id);
+            bool changedType = orig != null && i < orig.Length && list[i].type != orig[i];
+            if (!destroyed && !changedType) continue;
+            deltas.Add(new ChunkDelta
+            {
+                i = i,
+                d = destroyed,
+                t = changedType ? (int)list[i].type : -1
+            });
+        }
+        var save = new ChunkSave { deltas = deltas };
+        var json = JsonUtility.ToJson(save, true);
+        System.IO.File.WriteAllText(PathFor(key), json);
+    }
+
+    private void SaveAllLoadedChunks()
+    {
+        foreach (var key in _chunkData.Keys) SaveChunkDiffs(key);
+    }
+
+    void OnDisable() => SaveAllLoadedChunks();
 }
 
 // ==================== DATA STRUCTS ====================
@@ -492,4 +597,9 @@ public struct ObjectInstanceData
 public struct ObjectState
 {
     public bool isDestroyed;
+}
+public class WorldObjectRef : MonoBehaviour
+{
+    public ulong id;
+    public ObjectType type;
 }
