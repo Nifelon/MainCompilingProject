@@ -10,7 +10,12 @@ namespace Game.World.Objects
         Rock,
         Cactus,
         Bush,        // обычный (без €год)
-        BerryBush    // куст с €годами (интерактивный)
+        BerryBush,    // куст с €годами (интерактивный)
+        TentSmall,
+        TentLarge,
+        Campfire,
+        WorkBench
+    
     }
 
     // ”словный тэг поведени€ (на будущее, удобно как Flags)
