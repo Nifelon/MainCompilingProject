@@ -10,11 +10,7 @@ public class PlayerObjectInteractor : MonoBehaviour
 
     void Reset()
     {
-#if UNITY_2023_1_OR_NEWER
-        objectManager = FindFirstObjectByType<ObjectManager>();
-#else
         objectManager = FindObjectOfType<ObjectManager>();
-#endif
     }
 
     void Update()

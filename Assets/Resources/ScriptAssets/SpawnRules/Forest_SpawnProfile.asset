@@ -15,26 +15,26 @@ MonoBehaviour:
   biome: 4
   rules:
   - objectType: 1
-    targetPerChunk: 45
+    targetPerChunk: 1000
     mode: 1
-    clusterCountRange: {x: 4, y: 8}
-    minDistanceSameType: 1.8
-    minDistanceAny: 1.2
+    clusterCountRange: {x: 1, y: 2}
+    minDistanceSameType: 0.7
+    minDistanceAny: 0.4
     avoidOtherObjects: 1
     useNoiseGate: 1
     noiseThreshold: 0.5
-    noiseScale: 0.06
+    noiseScale: 0.22
     variants: 3
   - objectType: 5
-    targetPerChunk: 20
+    targetPerChunk: 500
     mode: 1
-    clusterCountRange: {x: 3, y: 5}
+    clusterCountRange: {x: 1, y: 1}
     minDistanceSameType: 1.2
     minDistanceAny: 1
     avoidOtherObjects: 1
     useNoiseGate: 1
     noiseThreshold: 0.55
-    noiseScale: 0.07
+    noiseScale: 0.12
     variants: 1
   - objectType: 6
     targetPerChunk: 10

@@ -368,6 +368,9 @@ MonoBehaviour:
   cellSize: 1
   ySort: 1
   ySortMul: 10
+  saveFolder: chunks/objects
+  objectsSortingLayer: WorldObjects
+  objectsOrderOffset: 0
 --- !u!1 &307055006
 GameObject:
   m_ObjectHideFlags: 0
@@ -2001,6 +2004,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1687318613}
+  - component: {fileID: 1687318614}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2023,6 +2027,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1772076462}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1687318614
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1687318612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf49a79f2bb26c34b95c0eead437e355, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  interactRadius: 0.9
+  interactMask:
+    serializedVersion: 2
+    m_Bits: 64
+  objectManager: {fileID: 186056082}
+  promptText: {fileID: 0}
 --- !u!1 &1754160285
 GameObject:
   m_ObjectHideFlags: 0

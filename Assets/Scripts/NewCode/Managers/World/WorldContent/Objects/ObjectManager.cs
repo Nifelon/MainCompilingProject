@@ -42,7 +42,7 @@ public class ObjectManager : MonoBehaviour
     [SerializeField] private string saveFolder = "chunks/objects";        // внутри persistentDataPath
 
     // === render/sorting (если ещё нет)
-    [SerializeField] private string objectsSortingLayer = "WorldObjects";
+    [SerializeField] private string objectsSortingLayer = "Objects";
     [SerializeField] private int objectsOrderOffset = 0;
     private int _objLayerID;
 
