@@ -15,6 +15,8 @@ public class ObjectManager : MonoBehaviour
     [Header("Generation")]
     [Tooltip("Глобальный сид мира для детерминированной генерации.")]
     [SerializeField] private int worldSeed = 12345;
+    // клетки, «занятые» лагерями/структурами – сюда обычный спавн не имеет права
+    private readonly HashSet<Vector2Int> _reservedCells = new();
 
     [Tooltip("Размер чанка в клетках. ДОЛЖЕН совпадать с PoolManager.objectsChunkSize.")]
     [SerializeField] private int chunkSize = 64;
@@ -70,7 +72,16 @@ public class ObjectManager : MonoBehaviour
         public readonly int x, y;
         public ChunkCoord(int x, int y) { this.x = x; this.y = y; }
     }
+    /// Забронировать прямоугольную область (в КЛЕТКАХ).
+    public void ReserveArea(RectInt rect)
+    {
+        for (int x = rect.xMin; x < rect.xMax; x++)
+            for (int y = rect.yMin; y < rect.yMax; y++)
+                _reservedCells.Add(new Vector2Int(x, y));
+    }
 
+    /// Быстрая проверка «клетка забронирована?»
+    public bool IsReserved(Vector2Int cell) => _reservedCells.Contains(cell);
     public Vector2Int ChunkOrigin(ChunkCoord c) => new(c.x * chunkSize, c.y * chunkSize);
     public ulong ChunkKey(ChunkCoord c) => ((ulong)(uint)c.x << 32) | (uint)c.y;
 
@@ -264,6 +275,7 @@ public class ObjectManager : MonoBehaviour
 
     private bool IsAllowed(BiomeType neededBiome, BiomeObjectRule rule, Vector2Int cell, HashSet<Vector2Int> occ, bool noiseGate = true)
     {
+        if (_reservedCells.Contains(cell)) return false;
         // 1) биом клетки должен совпадать с профилем
         if (_biomes == null || _biomes.GetBiomeAtPosition(cell) != neededBiome) return false;
 
@@ -298,6 +310,71 @@ public class ObjectManager : MonoBehaviour
             if (!IsNearBiome(cell, BiomeType.Savanna, 3)) return false;
 
         return true;
+    }
+    /// Создать объект заданного типа в точной клетке.
+    /// Возвращает его id (или 0, если отложено/не удалось).
+    public ulong PlaceObject(ObjectType type, Vector2Int cell, int variantIndex = 0)
+    {
+        // 0) проверим наличие паспорта
+        if (!_objByType.TryGetValue(type, out var data)) return 0;
+
+        // 1) вычисляем координаты чанка для клетки
+        int cx = cell.x >= 0 ? cell.x / chunkSize : (cell.x - (chunkSize - 1)) / chunkSize;
+        int cy = cell.y >= 0 ? cell.y / chunkSize : (cell.y - (chunkSize - 1)) / chunkSize;
+        var cc = new ChunkCoord(cx, cy);
+        var key = ChunkKey(cc);
+
+        // 2) убеждаемся, что можем работать с данными чанка
+        if (!_chunkData.TryGetValue(key, out var list))
+        {
+            // биомы должны быть готовы, иначе переносим постановку (вернём 0)
+            if (!(_biomes is BiomeManager bm) || !bm.IsBiomesReady) return 0;
+            list = new List<ObjectInstanceData>();
+            _chunkData[key] = list;
+        }
+
+        // 3) создаём запись
+        int safeVariant = 0;
+        if (data.spriteVariants != null && data.spriteVariants.Length > 0)
+            safeVariant = Mathf.Clamp(variantIndex, 0, data.spriteVariants.Length - 1);
+
+        var inst = new ObjectInstanceData
+        {
+            id = ((ulong)(uint)list.Count) | (key << 32),
+            type = type,
+            cell = cell,
+            variantIndex = safeVariant,
+            worldPos = CellToWorld(cell),
+            footprint = data.footprint
+        };
+
+        list.Add(inst);
+
+        // 4) чтобы в эту область не попали другие объекты, сразу отмечаем футпринт как «резерв»
+        for (int x = 0; x < data.footprint.x; x++)
+            for (int y = 0; y < data.footprint.y; y++)
+                _reservedCells.Add(new Vector2Int(cell.x + x, cell.y + y));
+
+        // 5) если визуал чанка уже загружен — нарисуем прямо сейчас
+        if (_chunkVisual.TryGetValue(key, out var gos))
+        {
+            var go = objectPool ? objectPool.Get(type) : CreateAdhocGO(type);
+            ApplyVisual(go, inst);
+            gos.Add(go);
+        }
+
+        return inst.id;
+    }
+    /// Зарезервировать круг (радиус в клетках).
+    public void ReserveCircle(Vector2Int center, int radius)
+    {
+        int r2 = radius * radius;
+        for (int y = center.y - radius; y <= center.y + radius; y++)
+            for (int x = center.x - radius; x <= center.x + radius; x++)
+            {
+                var c = new Vector2Int(x, y);
+                if ((c - center).sqrMagnitude <= r2) _reservedCells.Add(c);
+            }
     }
 
     private bool IsNearBiome(Vector2Int cell, BiomeType target, int radius)
@@ -505,13 +582,18 @@ public class ObjectManager : MonoBehaviour
     }
     public void ClearChunkCache()
     {
-        // выгрузить визуал
+        // выгрузка визуала
         foreach (var kv in _chunkVisual)
             foreach (var go in kv.Value)
                 if (go) { if (objectPool) objectPool.Release(go); else Destroy(go); }
+
         _chunkVisual.Clear();
         _chunkData.Clear();
         _stateDiffs.Clear();
+
+        // ВАЖНО: чистим резерв под лагеря (их пересоздаст CampManager)
+        _reservedCells.Clear();
+        _origTypes.Clear(); // если используешь снапшоты для дельт
     }
     [Serializable] class ChunkDelta { public int i; public bool d; public int t = -1; }
     [Serializable] class ChunkSave { public int v = 1; public List<ChunkDelta> deltas = new(); }
