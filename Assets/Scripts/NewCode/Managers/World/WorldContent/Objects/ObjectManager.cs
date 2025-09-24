@@ -351,6 +351,7 @@ public class ObjectManager : MonoBehaviour
                 sr.sprite = data.spriteVariants[Mathf.Clamp(inst.variantIndex, 0, data.spriteVariants.Length - 1)];
             if (sr.sortingLayerID != _objLayerID) sr.sortingLayerID = _objLayerID;
             sr.sortingOrder = objectsOrderOffset + (ySort ? -(int)Mathf.Round(go.transform.position.y * ySortMul) : 0);
+            sr.sortingLayerID = SortingLayer.NameToID("Objects");
         }
 
         // интерактив дл€ сборных (€годных)
