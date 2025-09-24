@@ -22,7 +22,8 @@ MonoBehaviour:
   maxHP: 1
   dropOnDestroy: 0
   drops: []
-  spriteVariants: []
+  spriteVariants:
+  - {fileID: -8464828356079238116, guid: 5b16420d9ac60934ab9feeb5e87397b0, type: 3}
   prefabOverride: {fileID: 0}
   harvest:
     harvestable: 0
