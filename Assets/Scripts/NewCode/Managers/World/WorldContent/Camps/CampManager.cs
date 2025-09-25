@@ -23,10 +23,17 @@ public class CampManager : MonoBehaviour, IWorldSystem
     [SerializeField] private bool verboseLogs = true;
     [SerializeField] private ObjectData[] objectCatalog;
     private Dictionary<ObjectType, ObjectData> _objByType;
+    [Header("Reservations")]
+    [SerializeField] private int reservationPadding = 0;
     [Header("Streaming")]
     [SerializeField] private int chunkSize = 64;
     [SerializeField] private int campChunkRadius = 3;
+    [SerializeField] private MonoBehaviour groundSpriteRef; // IGroundSpriteService
+    private IGroundSpriteService GroundSprite;
+    [SerializeField] private MonoBehaviour reservationRef;    // IReservationService
+    [SerializeField] private PoolManagerMainTile mainTiles;   // стример тайлов
 
+    private IReservationService Reservation;
     [Header("Seeding")]
     [Tooltip("Глобальное семя мира (если 0 — возьмём из контекста; если и там нет, из Environment.TickCount).")]
     [SerializeField] private int worldSeed = 0;
@@ -55,6 +62,7 @@ public class CampManager : MonoBehaviour, IWorldSystem
     // ===== IWorldSystem ========================================================
     public void Initialize(WorldContext ctx)
     {
+        GroundSprite = groundSpriteRef as IGroundSpriteService;
         // deps
         _biomes = biomeServiceRef as IBiomeService;
         if (_biomes == null)
@@ -252,23 +260,30 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
     private void SpawnCampRuntime(CampRuntime camp)
     {
-        // Центр лагеря в мировых координатах
-        var centerW = CellToWorld(camp.CenterCell);
-
-        // 1) Грунт лагеря (ковёр)
-        if (groundPatchPrefab && profile.campGroundSprite != null)
+        // 0) Резервация и оверрайд спрайтов тайлов
+        if (Reservation != null)
         {
-            var gp = Instantiate(groundPatchPrefab, transform);
-            var sr = gp.GetComponent<SpriteRenderer>();
-            if (sr) sr.sprite = profile.campGroundSprite;
-
-            gp.transform.position = new Vector3(centerW.x, centerW.y, 0f);
-            SetZByY(gp.transform);
-            camp.GroundPatch = gp;
+            Reservation.ReserveCircle(
+                camp.CenterCell,
+                profile.campRadius + reservationPadding,
+                ReservationMask.Nature | ReservationMask.Camps
+            );
         }
 
-        // 2) Структуры (детерминированно: RNG от центра лагеря)
-        var rngStruct = new Random(Hash3(worldSeed, profile.seedSalt, camp.CenterCell.x * 48611 ^ camp.CenterCell.y * 1223));
+        if (GroundSprite != null && profile.campGroundSprite != null)
+        {
+            GroundSprite.SetSpriteCircle(camp.CenterCell, profile.campRadius, profile.campGroundSprite);
+        }
+
+        // Перерисовать видимые клетки (без ?. для Unity)
+        if (mainTiles != null)
+            mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
+
+        // ===== дальше твой спавн структур и NPC — без изменений =====
+        var rngStruct = new System.Random(Hash3(
+            worldSeed, profile.seedSalt,
+            camp.CenterCell.x * 48611 ^ camp.CenterCell.y * 1223
+        ));
 
         if (profile.structures != null)
         {
@@ -279,21 +294,16 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
                 foreach (var cellPos in positions)
                 {
-                    // Достаём ObjectData по типу (см. комментарий ниже)
                     if (!TryGetData(s.type, out var data))
                     {
                         Debug.LogWarning($"[CampManager] No ObjectData for {s.type}");
                         continue;
                     }
 
-                    // Префаб: приоритет prefabOverride из ObjectData, иначе — из пула
-                    GameObject go = null;
-                    if (data.prefabOverride != null)
-                        go = Instantiate(data.prefabOverride, transform);
-                    else
-                        go = objectsPool != null ? objectsPool.Get(s.type) : null;
+                    GameObject go = data.prefabOverride != null
+                        ? Instantiate(data.prefabOverride, transform)
+                        : (objectsPool != null ? objectsPool.Get(s.type) : null);
 
-                    // Фолбэк, если пула/префаба нет
                     if (go == null)
                     {
                         go = new GameObject($"Camp_{s.type}");
@@ -301,17 +311,13 @@ public class CampManager : MonoBehaviour, IWorldSystem
                         go.AddComponent<SpriteRenderer>();
                     }
 
-                    // Позиция + визуальные смещения из ObjectData
                     var wpos = CellToWorld(cellPos);
                     wpos.x += data.pivotOffsetWorld.x;
                     wpos.y += data.pivotOffsetWorld.y + data.visualHeightUnits;
                     go.transform.position = wpos;
                     SetZByY(go.transform);
 
-                    // Гарантируем SpriteRenderer
                     var sr = go.GetComponentInChildren<SpriteRenderer>(true) ?? go.AddComponent<SpriteRenderer>();
-
-                    // Выбор спрайта детерминированно из ObjectData.spriteVariants (если задано)
                     if (data.spriteVariants != null && data.spriteVariants.Length > 0)
                     {
                         int key = Hash3(worldSeed, (int)s.type, cellPos.x * 48611 ^ cellPos.y * 1223);
@@ -319,21 +325,21 @@ public class CampManager : MonoBehaviour, IWorldSystem
                         var sprite = data.spriteVariants[idx];
                         if (sprite != null) sr.sprite = sprite;
                     }
-
-                    // Слой рендера, чтобы не прятались под ковром (настрой при желании в ObjectData)
                     sr.sortingLayerID = SortingLayer.NameToID("Objects");
 
                     if (sr.sprite == null)
-                        Debug.LogWarning($"[CampManager] Sprite is NULL for {s.type} at {cellPos}. Check ObjectData.spriteVariants or prefab sprite.");
+                        Debug.LogWarning($"[CampManager] Sprite is NULL for {s.type} at {cellPos}. Fill ObjectData.spriteVariants or prefab.");
 
                     camp.Structures.Add(go);
                 }
             }
         }
 
-        // 3) NPC (детерминированно: отдельный RNG)
-        var rngNpc = new Random(Hash3(worldSeed, profile.seedSalt ^ unchecked((int)0x9E3779B9u),
-                                      camp.CenterCell.x * 7349 ^ camp.CenterCell.y * 3163));
+        var GOLDEN32 = unchecked((int)0x9E3779B9u);
+        var rngNpc = new System.Random(Hash3(
+            worldSeed, profile.seedSalt ^ GOLDEN32,
+            camp.CenterCell.x * 7349 ^ camp.CenterCell.y * 3163
+        ));
 
         if (profile.npcRoles != null)
         {
@@ -365,12 +371,40 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
     private void DespawnCampRuntime(CampRuntime camp)
     {
+        // 0) Снять оверрайд спрайтов и резервацию
+        if (GroundSprite != null)
+            GroundSprite.ClearSpriteCircle(camp.CenterCell, profile.campRadius);
+
+        if (Reservation != null)
+        {
+            Reservation.ReleaseCircle(
+                camp.CenterCell,
+                profile.campRadius + reservationPadding,
+                ReservationMask.Nature | ReservationMask.Camps
+            );
+        }
+
+        // Перерисовать видимые клетки
+        if (mainTiles != null)
+            mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
+
+        // 1) Ковёр (если использовался)
         if (camp.GroundPatch) Destroy(camp.GroundPatch);
-        foreach (var go in camp.Structures) { if (go) objectsPool?.Release(go); }
-        foreach (var npc in camp.Npcs) { if (npc) Destroy(npc); }
-        camp.Structures.Clear();
-        camp.Npcs.Clear();
         camp.GroundPatch = null;
+
+        // 2) Структуры
+        foreach (var go in camp.Structures)
+        {
+            if (!go) continue;
+            if (objectsPool != null) objectsPool.Release(go);
+            else Destroy(go);
+        }
+        camp.Structures.Clear();
+
+        // 3) NPC
+        foreach (var npc in camp.Npcs)
+            if (npc) Destroy(npc);
+        camp.Npcs.Clear();
     }
 
     // ===== Layout helpers (детерминированные) ==================================

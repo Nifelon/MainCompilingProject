@@ -144,35 +144,29 @@ public class PoolManager : MonoBehaviour
 
     void RefreshAround(Vector2Int center)
     {
-        // 1) Добавить недостающие клетки
+        // 1) ДОБАВИТЬ недостающие клетки (квадратное окно)
         for (int y = -radius; y <= radius; y++)
             for (int x = -radius; x <= radius; x++)
             {
                 var cell = new Vector2Int(center.x + x, center.y + y);
-
                 if (!mainTilePool.activeSquares.ContainsKey(cell))
                 {
-                    var worldPos = CellToWorld(cell);
-                    var go = mainTilePool.GetSquare(worldPos, cell);
-                    if (go != null) mainTilePool.activeSquares[cell] = go;
+                    var go = mainTilePool.GetSquare(CellToWorld(cell), cell); // GetSquare сам регистрирует cell в activeSquares
+                                                                              // ничего руками в словарь не пишем, GetSquare уже это делает
                 }
             }
 
-        // 2) Удалить далёкие (радиус Чебышёва — без sqrt)
-        int killR = Mathf.RoundToInt(radius * 1.5f);
-
-        var remove = new List<Vector2Int>();
-        foreach (var kv in mainTilePool.activeSquares)
+        // 2) УДАЛИТЬ далёкие (Чебышёв > killR) — только после foreach по СНИМКУ
+        int killR = Mathf.RoundToInt(radius * 1.5f); // killR >= radius
+        var snapshot = new List<KeyValuePair<Vector2Int, GameObject>>(mainTilePool.activeSquares);
+        for (int i = 0; i < snapshot.Count; i++)
         {
+            var kv = snapshot[i];
             int dx = Mathf.Abs(kv.Key.x - center.x);
             int dy = Mathf.Abs(kv.Key.y - center.y);
             if (Mathf.Max(dx, dy) > killR)
-            {
-                mainTilePool.ReturnSquare(kv.Value);
-                remove.Add(kv.Key);
-            }
+                mainTilePool.ReturnSquare(kv.Value); // ReturnSquare сам удаляет запись из activeSquares
         }
-        foreach (var key in remove) mainTilePool.activeSquares.Remove(key);
     }
 
     // ==== внутренняя логика (объекты) ====

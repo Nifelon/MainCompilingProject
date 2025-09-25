@@ -14,8 +14,7 @@ namespace Game.World.Objects
         TentSmall,
         TentLarge,
         Campfire,
-        WorkBench
-    
+        WorkBench,
     }
 
     // Условный тэг поведения (на будущее, удобно как Flags)

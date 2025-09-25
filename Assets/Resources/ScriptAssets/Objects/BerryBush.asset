@@ -26,7 +26,7 @@ MonoBehaviour:
   - {fileID: 1887569513317297412, guid: 956195a6f4a9a264eb4b863e8254c5d0, type: 3}
   prefabOverride: {fileID: 0}
   harvest:
-    harvestable: 1
+    harvestable: 0
     harvestDrops:
     - itemId: Berry
       minCount: 3
