@@ -15,7 +15,8 @@ public class ObjectManager : MonoBehaviour
     [Header("Generation")]
     [Tooltip("Глобальный сид мира для детерминированной генерации.")]
     [SerializeField] private int worldSeed = 12345;
-    // клетки, «занятые» лагерями/структурами – сюда обычный спавн не имеет права
+
+    // Fallback-резерв на случай отсутствия сервиса (оставлен как было, но используется только как запасной вариант)
     private readonly HashSet<Vector2Int> _reservedCells = new();
 
     [Tooltip("Размер чанка в клетках. ДОЛЖЕН совпадать с PoolManager.objectsChunkSize.")]
@@ -39,6 +40,7 @@ public class ObjectManager : MonoBehaviour
 
     [Tooltip("Множитель для order при Y-сортировке (чем больше — тем стабильнее порядок).")]
     [SerializeField] private int ySortMul = 10;
+
     // === persistence ===
     private readonly Dictionary<ulong, ObjectType[]> _origTypes = new(); // snapshot типов при генерации
     [SerializeField] private string saveFolder = "chunks/objects";        // внутри persistentDataPath
@@ -47,6 +49,11 @@ public class ObjectManager : MonoBehaviour
     [SerializeField] private string objectsSortingLayer = "Objects";
     [SerializeField] private int objectsOrderOffset = 0;
     private int _objLayerID;
+
+    // ========== SERVICES ==========
+    [Header("Services")]
+    [SerializeField] private MonoBehaviour reservationRef;   // IReservationService
+    private IReservationService _reservation;                // глобальный реестр резерваций (круг лагеря и т.д.)
 
     // ========== DEPENDENCIES ==========
     private IBiomeService _biomes;
@@ -72,20 +79,33 @@ public class ObjectManager : MonoBehaviour
         public readonly int x, y;
         public ChunkCoord(int x, int y) { this.x = x; this.y = y; }
     }
+
     /// Забронировать прямоугольную область (в КЛЕТКАХ).
     public void ReserveArea(RectInt rect)
     {
-        for (int x = rect.xMin; x < rect.xMax; x++)
-            for (int y = rect.yMin; y < rect.yMax; y++)
-                _reservedCells.Add(new Vector2Int(x, y));
+        if (_reservation != null)
+        {
+            // нет ReserveRect в интерфейсе — пометим клетки нулевым радиусом
+            for (int x = rect.xMin; x < rect.xMax; x++)
+                for (int y = rect.yMin; y < rect.yMax; y++)
+                    _reservation.ReserveCircle(new Vector2Int(x, y), 0, ReservationMask.Nature | ReservationMask.Camps);
+        }
+        else
+        {
+            for (int x = rect.xMin; x < rect.xMax; x++)
+                for (int y = rect.yMin; y < rect.yMax; y++)
+                    _reservedCells.Add(new Vector2Int(x, y));
+        }
     }
 
     /// Быстрая проверка «клетка забронирована?»
-    public bool IsReserved(Vector2Int cell) => _reservedCells.Contains(cell);
+    public bool IsReserved(Vector2Int cell) =>
+        _reservation != null
+            ? _reservation.IsReserved(cell, ReservationMask.All)
+            : _reservedCells.Contains(cell);
+
     public Vector2Int ChunkOrigin(ChunkCoord c) => new(c.x * chunkSize, c.y * chunkSize);
     public ulong ChunkKey(ChunkCoord c) => ((ulong)(uint)c.x << 32) | (uint)c.y;
-
-    /// <summary>Ленивая генерация: вернёт готовые инстансы или сгенерирует заново.</summary>
 
     /// <summary>Создать/взять из пула визуал объектов чанка.</summary>
     public void LoadChunkVisuals(ChunkCoord cc)
@@ -132,6 +152,12 @@ public class ObjectManager : MonoBehaviour
         if (_biomes == null)
             Debug.LogError("[ObjectManager] BiomeManager не найден в сцене.");
 
+        // ReservationService (глобальный)
+        _reservation = reservationRef as IReservationService
+                       ?? FindFirstObjectByType<ReservationService>(FindObjectsInactive.Exclude);
+        if (_reservation == null)
+            Debug.LogWarning("[ObjectManager] IReservationService не найден — будем использовать локальный резерв.");
+
         // Pool
         if (!objectPool)
             objectPool = FindFirstObjectByType<PoolManagerObjects>(FindObjectsInactive.Exclude);
@@ -146,7 +172,9 @@ public class ObjectManager : MonoBehaviour
         _objByType.Clear();
         foreach (var od in objectDatabase)
             if (od) _objByType[od.type] = od;
+
         _objLayerID = SortingLayer.NameToID(objectsSortingLayer);
+
         var dir = System.IO.Path.Combine(Application.persistentDataPath, saveFolder);
         if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
     }
@@ -275,7 +303,16 @@ public class ObjectManager : MonoBehaviour
 
     private bool IsAllowed(BiomeType neededBiome, BiomeObjectRule rule, Vector2Int cell, HashSet<Vector2Int> occ, bool noiseGate = true)
     {
-        if (_reservedCells.Contains(cell)) return false;
+        // ГЛОБАЛЬНЫЙ РЕЗЕРВ (круги лагеря и т.п.)
+        if (_reservation != null)
+        {
+            if (_reservation.IsReserved(cell, ReservationMask.All)) return false;  // единый источник истины
+        }
+        else
+        {
+            if (_reservedCells.Contains(cell)) return false;                        // фолбэк
+        }
+
         // 1) биом клетки должен совпадать с профилем
         if (_biomes == null || _biomes.GetBiomeAtPosition(cell) != neededBiome) return false;
 
@@ -311,6 +348,7 @@ public class ObjectManager : MonoBehaviour
 
         return true;
     }
+
     /// Создать объект заданного типа в точной клетке.
     /// Возвращает его id (или 0, если отложено/не удалось).
     public ulong PlaceObject(ObjectType type, Vector2Int cell, int variantIndex = 0)
@@ -350,10 +388,19 @@ public class ObjectManager : MonoBehaviour
 
         list.Add(inst);
 
-        // 4) чтобы в эту область не попали другие объекты, сразу отмечаем футпринт как «резерв»
-        for (int x = 0; x < data.footprint.x; x++)
-            for (int y = 0; y < data.footprint.y; y++)
-                _reservedCells.Add(new Vector2Int(cell.x + x, cell.y + y));
+        // 4) помечаем клетки футпринта как зарезервированные (через глобальный сервис)
+        if (_reservation != null)
+        {
+            for (int x = 0; x < data.footprint.x; x++)
+                for (int y = 0; y < data.footprint.y; y++)
+                    _reservation.ReserveCircle(new Vector2Int(cell.x + x, cell.y + y), 0, ReservationMask.Nature | ReservationMask.Camps);
+        }
+        else
+        {
+            for (int x = 0; x < data.footprint.x; x++)
+                for (int y = 0; y < data.footprint.y; y++)
+                    _reservedCells.Add(new Vector2Int(cell.x + x, cell.y + y));
+        }
 
         // 5) если визуал чанка уже загружен — нарисуем прямо сейчас
         if (_chunkVisual.TryGetValue(key, out var gos))
@@ -365,9 +412,17 @@ public class ObjectManager : MonoBehaviour
 
         return inst.id;
     }
+
     /// Зарезервировать круг (радиус в клетках).
     public void ReserveCircle(Vector2Int center, int radius)
     {
+        if (_reservation != null)
+        {
+            _reservation.ReserveCircle(center, radius, ReservationMask.Nature | ReservationMask.Camps);
+            return;
+        }
+
+        // фолбэк — старое поведение
         int r2 = radius * radius;
         for (int y = center.y - radius; y <= center.y + radius; y++)
             for (int x = center.x - radius; x <= center.x + radius; x++)
@@ -493,7 +548,6 @@ public class ObjectManager : MonoBehaviour
                 if (UnityEngine.Random.value <= drop.chance)
                 {
                     int n = UnityEngine.Random.Range(drop.minCount, drop.maxCount + 1);
-                    // Подключи свою систему инвентаря:
                     // Inventory.Give(drop.itemId, n);
                 }
             }
@@ -541,6 +595,7 @@ public class ObjectManager : MonoBehaviour
             return h;
         }
     }
+
     // Фолбэк, если objectPool не назначен (debug/альфа)
     private Transform _adhocRoot;
 
@@ -565,6 +620,7 @@ public class ObjectManager : MonoBehaviour
 
         return go;
     }
+
     // ObjectManager.cs (в классе)
     private bool BiomesReady =>
         _biomes != null && (_biomes as BiomeManager)?.IsBiomesReady == true;
@@ -581,6 +637,66 @@ public class ObjectManager : MonoBehaviour
         _chunkData[key] = list;
         return list;
     }
+
+    /// <summary>
+    /// Удалить (или пометить уничтоженными) все природные объекты в заданном круге.
+    /// Правит _chunkData и сразу снимает визуал, если он загружен.
+    /// </summary>
+    public void RemoveObjectsInCircle(Vector2Int center, int radius)
+    {
+        int cs = chunkSize;
+        int r2 = radius * radius;
+
+        int minCx = Mathf.FloorToInt((center.x - radius) / (float)cs);
+        int maxCx = Mathf.FloorToInt((center.x + radius) / (float)cs);
+        int minCy = Mathf.FloorToInt((center.y - radius) / (float)cs);
+        int maxCy = Mathf.FloorToInt((center.y + radius) / (float)cs);
+
+        for (int cx = minCx; cx <= maxCx; cx++)
+            for (int cy = minCy; cy <= maxCy; cy++)
+            {
+                var cc = new ChunkCoord(cx, cy);
+                var key = ChunkKey(cc);
+
+                if (!_chunkData.TryGetValue(key, out var list) || list == null || list.Count == 0)
+                    continue;
+
+                // Собираем индексы попавших в круг
+                var toKill = new List<int>();
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var inst = list[i];
+                    var dx = inst.cell.x - center.x;
+                    var dy = inst.cell.y - center.y;
+                    if (dx * dx + dy * dy <= r2)
+                        toKill.Add(i);
+                }
+                if (toKill.Count == 0) continue;
+
+                // Снимаем визуал и помечаем как уничтоженные (сохраняем индексы)
+                if (_chunkVisual.TryGetValue(key, out var gos) && gos != null)
+                {
+                    foreach (var idx in toKill)
+                    {
+                        if (idx >= 0 && idx < gos.Count && gos[idx] != null)
+                        {
+                            if (objectPool) objectPool.Release(gos[idx]); else Destroy(gos[idx]);
+                            gos[idx] = null;
+                        }
+                    }
+                }
+
+                foreach (var idx in toKill)
+                {
+                    var id = ((ulong)(uint)idx) | (key << 32);
+                    MarkDestroyed(id);
+                }
+
+                // опционально: сразу сохранить дельты (если у тебя включено сохранение)
+                SaveChunkDiffs(key);
+            }
+    }
+
     public void ClearChunkCache()
     {
         // выгрузка визуала
@@ -592,10 +708,11 @@ public class ObjectManager : MonoBehaviour
         _chunkData.Clear();
         _stateDiffs.Clear();
 
-        // ВАЖНО: чистим резерв под лагеря (их пересоздаст CampManager)
+        // ВАЖНО: чистим локальный фолбэк-резерв (лагеря пере-резервируются стримером лагерей)
         _reservedCells.Clear();
         _origTypes.Clear(); // если используешь снапшоты для дельт
     }
+
     [Serializable] class ChunkDelta { public int i; public bool d; public int t = -1; }
     [Serializable] class ChunkSave { public int v = 1; public List<ChunkDelta> deltas = new(); }
 
@@ -681,6 +798,7 @@ public struct ObjectState
 {
     public bool isDestroyed;
 }
+
 public class WorldObjectRef : MonoBehaviour
 {
     public ulong id;

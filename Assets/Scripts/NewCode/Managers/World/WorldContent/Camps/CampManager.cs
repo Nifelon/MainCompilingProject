@@ -8,10 +8,10 @@ using Game.World.Objects;            // ObjectType (из профилей)
 using Game.World.Camps;              // CampProfile
 using Random = System.Random;
 
-[DefaultExecutionOrder(-225)]
+[DefaultExecutionOrder(-230)]
 public class CampManager : MonoBehaviour, IWorldSystem
 {
-    [SerializeField] private int order = 200;          // должен быть после Biome/Reservation
+    [SerializeField] private int order = -230;          // должен быть после Biome/Reservation
     public int Order => order;
 
     [Header("Profile & Refs")]
@@ -24,6 +24,8 @@ public class CampManager : MonoBehaviour, IWorldSystem
     [SerializeField] private ObjectData[] objectCatalog;
     private Dictionary<ObjectType, ObjectData> _objByType;
     [Header("Reservations")]
+    [SerializeField] private ObjectManager objectManager;
+    [SerializeField] private int reservePadding = 1;
     [SerializeField] private int reservationPadding = 0;
     [Header("Streaming")]
     [SerializeField] private int chunkSize = 64;
@@ -58,13 +60,33 @@ public class CampManager : MonoBehaviour, IWorldSystem
             return sum;
         }
     }
+    private void ReloadChunksIntersectingCircle(Vector2Int centerCell, int radiusCells)
+    {
+        if (objectManager == null) return;
 
+        // Узнаём размер чанка (если нет свойства — подставь ваше фикс. значение, например 64)
+        int cs = objectManager.ChunkSize;   // или: const int cs = 64;
+
+        int minCx = Mathf.FloorToInt((centerCell.x - radiusCells) / (float)cs);
+        int maxCx = Mathf.FloorToInt((centerCell.x + radiusCells) / (float)cs);
+        int minCy = Mathf.FloorToInt((centerCell.y - radiusCells) / (float)cs);
+        int maxCy = Mathf.FloorToInt((centerCell.y + radiusCells) / (float)cs);
+
+        for (int cx = minCx; cx <= maxCx; cx++)
+            for (int cy = minCy; cy <= maxCy; cy++)
+            {
+                var cc = new ObjectManager.ChunkCoord(cx, cy);
+                objectManager.UnloadChunkVisuals(cc);
+                objectManager.LoadChunkVisuals(cc);
+            }
+    }
     // ===== IWorldSystem ========================================================
     public void Initialize(WorldContext ctx)
     {
         GroundSprite = groundSpriteRef as IGroundSpriteService;
         // deps
         _biomes = biomeServiceRef as IBiomeService;
+        Reservation = reservationRef as IReservationService;
         if (_biomes == null)
         {
             Debug.LogError("[CampManager] IBiomeService is null");
@@ -149,6 +171,22 @@ public class CampManager : MonoBehaviour, IWorldSystem
     private void LoadChunkCamps(Vector2Int chunk)
     {
         var list = GetDeterministicCampsForChunk(chunk);
+
+        // 1) Пред-резерв зоны лагерей
+        if (objectManager != null && list != null)
+        {
+            foreach (var camp in list)
+                objectManager.ReserveCircle(camp.CenterCell, profile.campRadius + reservePadding);
+            foreach (var camp in list)
+                objectManager.RemoveObjectsInCircle(camp.CenterCell, profile.campRadius + reservePadding);
+
+
+            // ⬇️ 2) ПОДСТРАХОВКА: мгновенно перегружаем затронутые чанки
+            foreach (var camp in list)
+                ReloadChunksIntersectingCircle(camp.CenterCell, profile.campRadius + reservePadding);
+        }
+
+        // 3) Теперь обычный спавн визуала лагеря
         _chunkCamps[chunk] = list;
         foreach (var camp in list) SpawnCampRuntime(camp);
     }
@@ -260,15 +298,9 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
     private void SpawnCampRuntime(CampRuntime camp)
     {
+        if (objectManager != null)
+            objectManager.ReserveCircle(camp.CenterCell, profile.campRadius + reservePadding);
         // 0) Резервация и оверрайд спрайтов тайлов
-        if (Reservation != null)
-        {
-            Reservation.ReserveCircle(
-                camp.CenterCell,
-                profile.campRadius + reservationPadding,
-                ReservationMask.Nature | ReservationMask.Camps
-            );
-        }
 
         if (GroundSprite != null && profile.campGroundSprite != null)
         {
@@ -370,42 +402,42 @@ public class CampManager : MonoBehaviour, IWorldSystem
     }
 
     private void DespawnCampRuntime(CampRuntime camp)
+{
+    // 0) Снять оверрайд спрайтов и резервацию
+    if (GroundSprite != null)
+        GroundSprite.ClearSpriteCircle(camp.CenterCell, profile.campRadius);
+
+    if (Reservation != null)
     {
-        // 0) Снять оверрайд спрайтов и резервацию
-        if (GroundSprite != null)
-            GroundSprite.ClearSpriteCircle(camp.CenterCell, profile.campRadius);
-
-        if (Reservation != null)
-        {
-            Reservation.ReleaseCircle(
-                camp.CenterCell,
-                profile.campRadius + reservationPadding,
-                ReservationMask.Nature | ReservationMask.Camps
-            );
-        }
-
-        // Перерисовать видимые клетки
-        if (mainTiles != null)
-            mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
-
-        // 1) Ковёр (если использовался)
-        if (camp.GroundPatch) Destroy(camp.GroundPatch);
-        camp.GroundPatch = null;
-
-        // 2) Структуры
-        foreach (var go in camp.Structures)
-        {
-            if (!go) continue;
-            if (objectsPool != null) objectsPool.Release(go);
-            else Destroy(go);
-        }
-        camp.Structures.Clear();
-
-        // 3) NPC
-        foreach (var npc in camp.Npcs)
-            if (npc) Destroy(npc);
-        camp.Npcs.Clear();
+        Reservation.ReleaseCircle(
+            camp.CenterCell,
+            profile.campRadius + reservationPadding,
+            ReservationMask.Nature | ReservationMask.Camps
+        );
     }
+
+    // Перерисовать видимые клетки
+    if (mainTiles != null)
+        mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
+
+    // 1) Ковёр (если использовался)
+    if (camp.GroundPatch) Destroy(camp.GroundPatch);
+    camp.GroundPatch = null;
+
+    // 2) Структуры
+    foreach (var go in camp.Structures)
+    {
+        if (!go) continue;
+        if (objectsPool != null) objectsPool.Release(go);
+        else Destroy(go);
+    }
+    camp.Structures.Clear();
+
+    // 3) NPC
+    foreach (var npc in camp.Npcs)
+        if (npc) Destroy(npc);
+    camp.Npcs.Clear();
+}
 
     // ===== Layout helpers (детерминированные) ==================================
 
