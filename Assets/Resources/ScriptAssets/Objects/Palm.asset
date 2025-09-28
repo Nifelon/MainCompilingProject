@@ -23,8 +23,8 @@ MonoBehaviour:
   dropOnDestroy: 0
   drops: []
   spriteVariants:
-  - {fileID: -7687813888532310657, guid: bcbba211656d53c48858e3c226280b68, type: 3}
   - {fileID: 1793771416626559817, guid: bcbba211656d53c48858e3c226280b68, type: 3}
+  - {fileID: -7687813888532310657, guid: bcbba211656d53c48858e3c226280b68, type: 3}
   prefabOverride: {fileID: 0}
   harvest:
     harvestable: 0

@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83b5d02e858cbaa4886382028c38c4bc, type: 3}
+  m_Name: Camp_1
+  m_EditorClassIdentifier: 
+  allowedBiomes: 040301020506
+  targetCamps: 80
+  minDistanceBetweenCamps: 80
+  useNoiseGate: 1
+  noiseScale: 0.01
+  noiseThreshold: 0.5
+  seedSalt: 137
+  campRadius: 8
+  creaturesNoSpawnRadius: 12
+  layout: 0
+  layoutPadding: 2
+  campGroundSprite: {fileID: 4899235335038681112, guid: 5b834c40b8697e24a9cf310f7001fd6e, type: 3}
+  groundMode: 0
+  structures:
+  - type: 9
+    countRange: {x: 1, y: 1}
+    variantIndex: 0
+    dist: 0
+    ringOffset: 0
+    minDistanceSameType: 0
+  - type: 7
+    countRange: {x: 6, y: 8}
+    variantIndex: 0
+    dist: 1
+    ringOffset: 3
+    minDistanceSameType: 2
+  - type: 8
+    countRange: {x: 1, y: 1}
+    variantIndex: 0
+    dist: 1
+    ringOffset: 2
+    minDistanceSameType: 2
+  - type: 10
+    countRange: {x: 1, y: 1}
+    variantIndex: 0
+    dist: 2
+    ringOffset: 1
+    minDistanceSameType: 1
+  npcPack: {fileID: 11400000, guid: 469fa144f74fc354c881cdae46f05c18, type: 2}
+  npcRoles: []
+  allowOverlapWithNature: 0

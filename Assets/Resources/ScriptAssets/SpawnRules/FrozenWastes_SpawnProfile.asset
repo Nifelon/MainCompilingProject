@@ -35,7 +35,7 @@ MonoBehaviour:
     useNoiseGate: 1
     noiseThreshold: 0.55
     noiseScale: 0.08
-    variants: 3
+    variants: 2
   - objectType: 5
     targetPerChunk: 4
     mode: 2

@@ -57,7 +57,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 100
+  spritePixelsToUnits: 300
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -110,11 +110,11 @@ TextureImporter:
       rect:
         serializedVersion: 2
         x: 44
-        y: 96
-        width: 293
-        height: 683
+        y: 150
+        width: 283
+        height: 572
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -128,37 +128,15 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: 09dfbd6c-e868-4904-9c8b-af3b40b0c2dc_1
-      rect:
-        serializedVersion: 2
-        x: 259
-        y: 32
-        width: 539
-        height: 987
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 7b21e945cb6ed1550800000000000000
-      internalID: 6133311964096369335
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
       name: 09dfbd6c-e868-4904-9c8b-af3b40b0c2dc_2
       rect:
         serializedVersion: 2
-        x: 643
-        y: 48
-        width: 379
-        height: 627
+        x: 657
+        y: 138
+        width: 328
+        height: 521
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -175,7 +153,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: e222306a5b00e404a8f751852c1436a4
     internalID: 0
     vertices: []
     indices: 

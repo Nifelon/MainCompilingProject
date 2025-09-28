@@ -1,0 +1,85 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 92a2e8601d42a6b43ae217564a5ee7d8, type: 3}
+  m_Name: groupwolf_spawn_01
+  m_EditorClassIdentifier: 
+  biomeRules:
+  - biome: 1
+    groups:
+    - group: {fileID: 11400000, guid: 8f33acae038596044b5936250e4ede05, type: 2}
+      weight: 12
+    - group: {fileID: 11400000, guid: 4a0b3ba84c52eee469a6383ba4adef66, type: 2}
+      weight: 6
+    spawnDensity: 0.25
+    minGroupDistance: 20
+    maxAlive: 0
+    respawnCooldown: 0
+  - biome: 2
+    groups:
+    - group: {fileID: 11400000, guid: 8f33acae038596044b5936250e4ede05, type: 2}
+      weight: 12
+    - group: {fileID: 11400000, guid: 4a0b3ba84c52eee469a6383ba4adef66, type: 2}
+      weight: 6
+    spawnDensity: 0.25
+    minGroupDistance: 20
+    maxAlive: 0
+    respawnCooldown: 0
+  - biome: 3
+    groups:
+    - group: {fileID: 11400000, guid: 8f33acae038596044b5936250e4ede05, type: 2}
+      weight: 12
+    - group: {fileID: 11400000, guid: 4a0b3ba84c52eee469a6383ba4adef66, type: 2}
+      weight: 6
+    spawnDensity: 0.25
+    minGroupDistance: 20
+    maxAlive: 0
+    respawnCooldown: 0
+  - biome: 4
+    groups:
+    - group: {fileID: 11400000, guid: 8f33acae038596044b5936250e4ede05, type: 2}
+      weight: 12
+    - group: {fileID: 11400000, guid: 4a0b3ba84c52eee469a6383ba4adef66, type: 2}
+      weight: 6
+    spawnDensity: 0.25
+    minGroupDistance: 20
+    maxAlive: 0
+    respawnCooldown: 0
+  - biome: 5
+    groups:
+    - group: {fileID: 11400000, guid: 8f33acae038596044b5936250e4ede05, type: 2}
+      weight: 12
+    - group: {fileID: 11400000, guid: 4a0b3ba84c52eee469a6383ba4adef66, type: 2}
+      weight: 6
+    spawnDensity: 0.25
+    minGroupDistance: 20
+    maxAlive: 0
+    respawnCooldown: 0
+  - biome: 6
+    groups:
+    - group: {fileID: 11400000, guid: 8f33acae038596044b5936250e4ede05, type: 2}
+      weight: 12
+    - group: {fileID: 11400000, guid: 4a0b3ba84c52eee469a6383ba4adef66, type: 2}
+      weight: 6
+    spawnDensity: 0.25
+    minGroupDistance: 20
+    maxAlive: 0
+    respawnCooldown: 0
+  - biome: 0
+    groups:
+    - group: {fileID: 11400000, guid: 8f33acae038596044b5936250e4ede05, type: 2}
+      weight: 12
+    - group: {fileID: 11400000, guid: 4a0b3ba84c52eee469a6383ba4adef66, type: 2}
+      weight: 6
+    spawnDensity: 0.25
+    minGroupDistance: 20
+    maxAlive: 0
+    respawnCooldown: 0
