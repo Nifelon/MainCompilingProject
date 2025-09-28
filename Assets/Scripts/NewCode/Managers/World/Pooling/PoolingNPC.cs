@@ -38,6 +38,7 @@ public class PoolingNPC : MonoBehaviour
 
     private void Awake()
     {
+
         if (!npcService) npcService = FindFirstObjectByType<NPCService>(FindObjectsInactive.Exclude);
         if (!campManager) campManager = FindFirstObjectByType<CampManager>(FindObjectsInactive.Exclude);
         if (!npcPool) npcPool = FindFirstObjectByType<NpcPool>(FindObjectsInactive.Exclude);
