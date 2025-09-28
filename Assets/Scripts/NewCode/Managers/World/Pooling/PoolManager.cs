@@ -76,7 +76,7 @@ public class PoolManager : MonoBehaviour
         };
 
         // очистим закэшированные до готовности биомов пустые чанки
-        if (objectManager) objectManager.ClearChunkCache();  // <-- добавь
+        if (objectManager) objectManager.DespawnAll();  // <-- добавь
 
         ForceRefresh(); // он уже вызывает RefreshObjectChunks
     }
