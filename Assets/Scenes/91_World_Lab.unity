@@ -1898,12 +1898,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   player: {fileID: 1687318613}
   objectManager: {fileID: 4639616611306919125}
+  tiles: {fileID: 6399086736470901221}
   cellSize: 1
   tileRadius: 64
-  tiles: {fileID: 6399086736470901221}
   objectsChunkSize: 64
   loadPaddingCells: 8
   keepPaddingCells: 12
+  refreshInterval: 0.15
+  verbose: 1
 --- !u!1 &1666305549
 GameObject:
   m_ObjectHideFlags: 0
@@ -2398,8 +2400,8 @@ MonoBehaviour:
   worldSeed: 12345
   gridStepCells: 16
   warmupFrames: 2
-  verbose: 1
-  logReasons: 1
+  verbose: 0
+  logReasons: 0
 --- !u!114 &1153122227560260317
 MonoBehaviour:
   m_ObjectHideFlags: 0

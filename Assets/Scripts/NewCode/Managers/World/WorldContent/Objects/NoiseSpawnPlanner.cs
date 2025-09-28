@@ -60,8 +60,10 @@ namespace Game.World.Objects.Spawning
             {
                 if (rule == null || rule.objectType == ObjectType.None) continue;
 
-                int targetBase = Mathf.RoundToInt(rule.baseDensityPerChunk * densMul);
-                int target = Mathf.Clamp(targetBase, 0, rule.maxPerChunk);
+                float areaMul = (chunkSize * chunkSize) / (64f * 64f);
+
+                // целевое количество с учётом мультипликатора профиля и площади чанка
+                int target = Mathf.RoundToInt(Mathf.Max(0, rule.targetPerChunk) * densMul * areaMul);
                 if (target <= 0) continue;
 
                 var rng = new System.Random(Hash(worldSeed, originCell.x, originCell.y, (int)rule.objectType));
