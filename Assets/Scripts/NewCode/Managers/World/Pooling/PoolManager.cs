@@ -243,4 +243,6 @@ public class PoolManager : MonoBehaviour
     }
 
     static ulong ChunkKey(int x, int y) => ((ulong)(uint)x << 32) | (uint)y;
+    public int RadiusCells => radius;
+    public float CellSizeWorld => cellSize;
 }
