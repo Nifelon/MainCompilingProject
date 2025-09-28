@@ -220,6 +220,7 @@ GameObject:
   - component: {fileID: 186056084}
   - component: {fileID: 186056085}
   - component: {fileID: 186056086}
+  - component: {fileID: 186056087}
   m_Layer: 0
   m_Name: Systems
   m_TagString: Untagged
@@ -449,6 +450,30 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: caaff7788220149449d03398b6a19847, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &186056087
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 186056074}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eac6f0d0ec086e2429157f78b7027168, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  player: {fileID: 1687318613}
+  biomeServiceRef: {fileID: 186056075}
+  reservationRef: {fileID: 186056085}
+  rules: {fileID: 11400000, guid: 2bb092c06356f3d4fb5862d3ca08c6b8, type: 2}
+  chunkSize: 64
+  streamRadiusChunks: 3
+  cellSize: 1
+  worldSeed: 12345
+  gridStepCells: 16
+  autoInitialize: 1
+  verbose: 1
+  logReasons: 1
 --- !u!1 &307055006
 GameObject:
   m_ObjectHideFlags: 0
@@ -582,6 +607,9 @@ GameObject:
   - component: {fileID: 391172008}
   - component: {fileID: 391172007}
   - component: {fileID: 391172010}
+  - component: {fileID: 391172011}
+  - component: {fileID: 391172012}
+  - component: {fileID: 391172013}
   m_Layer: 0
   m_Name: Polling
   m_TagString: Untagged
@@ -654,6 +682,60 @@ MonoBehaviour:
   defaultSpritePrefab: {fileID: 4810241971616142191, guid: 1cd78f1e20ddce643b91336ed0afc827, type: 3}
   overrides: []
   objectsRoot: {fileID: 0}
+--- !u!114 &391172011
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 391172006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5d6e6fc629816149a4155645ab22b95, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  warmup: []
+--- !u!114 &391172012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 391172006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27dc3dde5484d514c9cbef523e5cd0af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  player: {fileID: 1687318613}
+  campManager: {fileID: 186056083}
+  npcService: {fileID: 186056086}
+  npcPool: {fileID: 391172011}
+  defaultNpcPrefab: {fileID: 4810241971616142191, guid: b9d7f6e4acd947b49a10ebcb9f3b561f, type: 3}
+  loadRadius: 48
+  unloadRadius: 56
+  cellSize: 1
+  verboseLogs: 0
+--- !u!114 &391172013
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 391172006}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 628034576e403d74389c3a91a62965b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  player: {fileID: 1687318613}
+  spawner: {fileID: 186056087}
+  pool: {fileID: 391172011}
+  defaultCreaturePrefab: {fileID: 4810241971616142191, guid: b9d7f6e4acd947b49a10ebcb9f3b561f, type: 3}
+  loadRadius: 48
+  unloadRadius: 56
+  cellSize: 1
+  verbose: 0
 --- !u!1 &488476175
 GameObject:
   m_ObjectHideFlags: 0

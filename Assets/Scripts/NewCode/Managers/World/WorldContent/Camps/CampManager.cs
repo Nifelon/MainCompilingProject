@@ -245,6 +245,7 @@ public class CampManager : MonoBehaviour, IWorldSystem
         if (!WinsMinDistanceTiebreak(chunk, centerCell, profile.minDistanceBetweenCamps)) return result;
 
         result.Add(new CampRuntime { CenterCell = centerCell });
+        Reservation.ReserveCircle(centerCell, profile.creaturesNoSpawnRadius, ReservationMask.Creatures);
         return result;
     }
 

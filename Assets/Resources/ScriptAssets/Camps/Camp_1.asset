@@ -20,6 +20,7 @@ MonoBehaviour:
   noiseThreshold: 0.5
   seedSalt: 137
   campRadius: 8
+  creaturesNoSpawnRadius: 12
   layout: 0
   layoutPadding: 2
   campGroundSprite: {fileID: 4899235335038681112, guid: 5b834c40b8697e24a9cf310f7001fd6e, type: 3}
@@ -49,17 +50,6 @@ MonoBehaviour:
     dist: 2
     ringOffset: 1
     minDistanceSameType: 1
-  npcRoles:
-  - roleName: "\u041A\u0430\u043F\u0438\u0442\u0430\u043D"
-    prefab: {fileID: 922558857699901330, guid: 3a83a3e984f52ba4497ce633d8e1b46d, type: 3}
-    countRange: {x: 1, y: 1}
-    dist: 1
-    radius: 2
-    guardOffset: {x: 0, y: 2}
-  - roleName: "\u0421\u043E\u043B\u0434\u0430\u0442"
-    prefab: {fileID: 3089908264429567603, guid: 39754a0ff49ee82429657aea55f6c2a0, type: 3}
-    countRange: {x: 4, y: 8}
-    dist: 1
-    radius: 7
-    guardOffset: {x: 0, y: -1}
+  npcPack: {fileID: 11400000, guid: 469fa144f74fc354c881cdae46f05c18, type: 2}
+  npcRoles: []
   allowOverlapWithNature: 0

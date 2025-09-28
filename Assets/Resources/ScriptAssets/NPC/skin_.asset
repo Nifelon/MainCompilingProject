@@ -12,9 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ad54a752b3b88174d81e3f1edce12869, type: 3}
   m_Name: skin_
   m_EditorClassIdentifier: 
-  portrait:
-  - {fileID: -7122477923702309447, guid: ff2decb4dd33f6a42a26b273bf20092a, type: 3}
+  portraitOverride: {fileID: 0}
   animatorOverride: {fileID: 0}
   materialOverride: {fileID: 0}
   colorTint: {r: 1, g: 1, b: 1, a: 1}
-  baseSprite: {fileID: 0}
+  baseSprite: {fileID: -7122477923702309447, guid: ff2decb4dd33f6a42a26b273bf20092a, type: 3}

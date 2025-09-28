@@ -112,6 +112,7 @@ public class PoolingNPC : MonoBehaviour
         var go = npcPool.Get(prefab);
         go.transform.SetParent(transform, false);
         go.transform.position = CellToWorld(p.cell);
+        go.name = p.profile.id;
         SetZByY(go.transform);
 
         // агент логики

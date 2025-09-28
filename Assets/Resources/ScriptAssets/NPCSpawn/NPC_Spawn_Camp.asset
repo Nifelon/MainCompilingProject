@@ -12,4 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8e68b7444e8810499c0ae1a55d8141f, type: 3}
   m_Name: NPC_Spawn_Camp
   m_EditorClassIdentifier: 
-  entries: []
+  entries:
+  - profile: {fileID: 11400000, guid: 1e2908690b6f6b04f80eb3d34664da0c, type: 2}
+    count: {x: 1, y: 1}
+    anchor: 0
+    radiusFromCenter: 0
+    spacing: 3
+  - profile: {fileID: 11400000, guid: 823bfd82e0ebac74c84d23a060d2411c, type: 2}
+    count: {x: 4, y: 8}
+    anchor: 1
+    radiusFromCenter: 0
+    spacing: 2
