@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
-
+using Game.World.Objects;
 public class PlayerObjectInteractor : MonoBehaviour
 {
     [SerializeField] private float interactRadius = 0.9f;
@@ -27,10 +27,10 @@ public class PlayerObjectInteractor : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.E) && objectManager)
         {
-            if (objectManager.TryHarvest(wref.id))
-            {
-                // можно добавить анимацию/звук/уведомление
-            }
+            //if (objectManager.TryHarvest(wref.id))
+            //{
+            //    // можно добавить анимацию/звук/уведомление
+            //}
         }
     }
 
