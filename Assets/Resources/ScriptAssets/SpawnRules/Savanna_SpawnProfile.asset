@@ -57,5 +57,5 @@ MonoBehaviour:
     useNoiseGate: 0
     noiseThreshold: 0.55
     noiseScale: 0
-    variants: 3
+    variants: 2
   densityMultiplier: 1

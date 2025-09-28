@@ -1,23 +1,24 @@
-using System;
+ï»¿using System;
 using UnityEngine;
 
 [Flags]
 public enum ReservationMask
 {
     None = 0,
-    Nature = 1 << 0,   // äåðåâüÿ/êàìíè/êóñòû
-    Camps = 1 << 1,   // ñàì ëàãåðü
+    Nature = 1 << 0,   // Ð´ÐµÑ€ÐµÐ²ÑŒÑ/ÐºÐ°Ð¼Ð½Ð¸/ÐºÑƒÑÑ‚Ñ‹
+    Camps = 1 << 1,   // ÑÐ°Ð¼ Ð»Ð°Ð³ÐµÑ€ÑŒ
+    Creatures = 1 << 2,   // â† ÐÐžÐ’ÐžÐ•: Ð·Ð°Ð¿Ñ€ÐµÑ‚ ÑÐ¿Ð°Ð²Ð½Ð° ÑÑƒÑ‰ÐµÑÑ‚Ð² (Ð¾Ð»ÐµÐ½Ð¸/Ð²Ð¾Ð»ÐºÐ¸ Ð¸ Ñ‚.Ð¿.)
     All = ~0
 }
 
 public interface IReservationService
 {
-    // Ïîìåòèòü êðóã êëåòîê ôëàãàìè mask. Âîçâðàùàåò êîë-âî ïîìå÷åííûõ êëåòîê.
+    // ÐŸÐ¾Ð¼ÐµÑ‚Ð¸Ñ‚ÑŒ ÐºÑ€ÑƒÐ³ ÐºÐ»ÐµÑ‚Ð¾Ðº Ñ„Ð»Ð°Ð³Ð°Ð¼Ð¸ mask. Ð’Ð¾Ð·Ð²Ñ€Ð°Ñ‰Ð°ÐµÑ‚ ÐºÐ¾Ð»-Ð²Ð¾ Ð¿Ð¾Ð¼ÐµÑ‡ÐµÐ½Ð½Ñ‹Ñ… ÐºÐ»ÐµÑ‚Ð¾Ðº.
     int ReserveCircle(Vector2Int center, int radius, ReservationMask mask);
 
-    // Ñíÿòü ôëàãè mask â êðóãå. (Óäàëÿåò êëþ÷, åñëè ìàñêà ñòàëà ïóñòîé.)
+    // Ð¡Ð½ÑÑ‚ÑŒ Ñ„Ð»Ð°Ð³Ð¸ mask Ð² ÐºÑ€ÑƒÐ³Ðµ. (Ð£Ð´Ð°Ð»ÑÐµÑ‚ ÐºÐ»ÑŽÑ‡, ÐµÑÐ»Ð¸ Ð¼Ð°ÑÐºÐ° ÑÑ‚Ð°Ð»Ð° Ð¿ÑƒÑÑ‚Ð¾Ð¹.)
     void ReleaseCircle(Vector2Int center, int radius, ReservationMask mask);
 
-    // Ïðîâåðèòü, åñòü ëè ïåðåñå÷åíèå mask â êëåòêå.
+    // ÐŸÑ€Ð¾Ð²ÐµÑ€Ð¸Ñ‚ÑŒ, ÐµÑÑ‚ÑŒ Ð»Ð¸ Ð¿ÐµÑ€ÐµÑÐµÑ‡ÐµÐ½Ð¸Ðµ mask Ð² ÐºÐ»ÐµÑ‚ÐºÐµ.
     bool IsReserved(Vector2Int cell, ReservationMask mask);
 }

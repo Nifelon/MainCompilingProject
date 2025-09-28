@@ -15,7 +15,7 @@ MonoBehaviour:
   biome: 1
   rules:
   - objectType: 2
-    targetPerChunk: 55
+    targetPerChunk: 400
     mode: 1
     clusterCountRange: {x: 4, y: 8}
     minDistanceSameType: 2
@@ -46,5 +46,5 @@ MonoBehaviour:
     useNoiseGate: 1
     noiseThreshold: 0.55
     noiseScale: 0.07
-    variants: 3
+    variants: 2
   densityMultiplier: 1

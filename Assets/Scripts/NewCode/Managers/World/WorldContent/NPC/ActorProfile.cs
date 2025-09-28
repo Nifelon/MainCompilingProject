@@ -14,7 +14,6 @@ namespace Game.Actors
         [Header("Identity")]
         public string id;
         public string displayName;
-        public GameObject prefab;
         public Sprite portrait;
 
         [Header("Faction/Tags")]

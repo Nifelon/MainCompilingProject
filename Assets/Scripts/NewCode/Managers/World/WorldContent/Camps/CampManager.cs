@@ -1,4 +1,4 @@
-﻿// Assets/Game/World/Camps/CampManager.cs
+﻿// Assets/Game/World/Camps/CampManager.cs (patched to NPC data-only)
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -6,6 +6,7 @@ using Game.Core;                      // IWorldSystem, WorldContext
 using Game.World.Map.Biome;          // IBiomeService, BiomeType
 using Game.World.Objects;            // ObjectType (из профилей)
 using Game.World.Camps;              // CampProfile
+using Game.World.NPC;                // NPCProfile, NPCSpawnList
 using Random = System.Random;
 
 [DefaultExecutionOrder(-230)]
@@ -21,21 +22,26 @@ public class CampManager : MonoBehaviour, IWorldSystem
     [SerializeField] private PoolManagerObjects objectsPool;  // ObjectType->Pool
     [SerializeField] private GameObject groundPatchPrefab;    // визуальный "ковёр"
     [SerializeField] private bool verboseLogs = true;
+
+    [Header("Object DB (для структур)")]
     [SerializeField] private ObjectData[] objectCatalog;
     private Dictionary<ObjectType, ObjectData> _objByType;
+
     [Header("Reservations")]
     [SerializeField] private ObjectManager objectManager;
     [SerializeField] private int reservePadding = 1;
     [SerializeField] private int reservationPadding = 0;
+
     [Header("Streaming")]
     [SerializeField] private int chunkSize = 64;
     [SerializeField] private int campChunkRadius = 3;
-    [SerializeField] private MonoBehaviour groundSpriteRef; // IGroundSpriteService
+    [SerializeField] private MonoBehaviour groundSpriteRef;   // IGroundSpriteService
     private IGroundSpriteService GroundSprite;
     [SerializeField] private MonoBehaviour reservationRef;    // IReservationService
     [SerializeField] private PoolManagerMainTile mainTiles;   // стример тайлов
 
     private IReservationService Reservation;
+
     [Header("Seeding")]
     [Tooltip("Глобальное семя мира (если 0 — возьмём из контекста; если и там нет, из Environment.TickCount).")]
     [SerializeField] private int worldSeed = 0;
@@ -50,7 +56,7 @@ public class CampManager : MonoBehaviour, IWorldSystem
     private Vector2Int _lastPlayerChunk;
     private bool _inited;
 
-    // ===== ПУБЛИЧНЫЕ МЕТРИКИ ===================================================
+    // ===== PUBLIC METRICS =====================================================
     public int ActiveCampCount
     {
         get
@@ -60,13 +66,32 @@ public class CampManager : MonoBehaviour, IWorldSystem
             return sum;
         }
     }
+
+    // ====== NPC DATA MODEL (NEW) =============================================
+    [Serializable]
+    public struct PlannedNpc
+    {
+        public ulong id;             // стабильный id в рамках лагеря
+        public Vector2Int cell;      // позиция в клетках
+        public NPCProfile profile;   // профиль NPC (для PoolingNPC)
+        public int campId;           // идентификатор лагеря (детерминированный)
+    }
+
+    // Рантайм-данные лагеря
+    private class CampRuntime
+    {
+        public Vector2Int CenterCell;
+        public GameObject GroundPatch;
+        public readonly List<GameObject> Structures = new();
+        public readonly List<PlannedNpc> PlannedNpcs = new();   // ← вместо List<GameObject> Npcs
+    }
+
+    // Перегрузка визуала объектов в чанках, пересекающих круг (когда счищаем природу под лагерь)
     private void ReloadChunksIntersectingCircle(Vector2Int centerCell, int radiusCells)
     {
         if (objectManager == null) return;
 
-        // Узнаём размер чанка (если нет свойства — подставь ваше фикс. значение, например 64)
-        int cs = objectManager.ChunkSize;   // или: const int cs = 64;
-
+        int cs = objectManager.ChunkSize;
         int minCx = Mathf.FloorToInt((centerCell.x - radiusCells) / (float)cs);
         int maxCx = Mathf.FloorToInt((centerCell.x + radiusCells) / (float)cs);
         int minCy = Mathf.FloorToInt((centerCell.y - radiusCells) / (float)cs);
@@ -80,11 +105,12 @@ public class CampManager : MonoBehaviour, IWorldSystem
                 objectManager.LoadChunkVisuals(cc);
             }
     }
+
     // ===== IWorldSystem ========================================================
     public void Initialize(WorldContext ctx)
     {
         GroundSprite = groundSpriteRef as IGroundSpriteService;
-        // deps
+
         _biomes = biomeServiceRef as IBiomeService;
         Reservation = reservationRef as IReservationService;
         if (_biomes == null)
@@ -97,14 +123,16 @@ public class CampManager : MonoBehaviour, IWorldSystem
         if (worldSeed == 0)
         {
             if (ctx != null && ctx.Seed != 0)
-                worldSeed = ctx.Seed;                 // берём сид из контекста (int)
-
+                worldSeed = ctx.Seed;
             if (worldSeed == 0)
-                worldSeed = Environment.TickCount;    // запасной вариант
+                worldSeed = Environment.TickCount;
         }
+
+        // карта ObjectType -> ObjectData для структур лагеря
         _objByType = new Dictionary<ObjectType, ObjectData>(objectCatalog?.Length ?? 0);
         if (objectCatalog != null)
             foreach (var d in objectCatalog) if (d) _objByType[d.type] = d;
+
         // первичная инициализация стриминга
         _activeChunks.Clear();
         _chunkCamps.Clear();
@@ -119,15 +147,13 @@ public class CampManager : MonoBehaviour, IWorldSystem
             Debug.Log($"[CampManager] Init complete. seed={worldSeed}, chunks={_activeChunks.Count}, campsActive={ActiveCampCount}");
 #endif
     }
+
     private bool TryGetData(ObjectType t, out ObjectData d)
     {
-        if (_objByType == null)
-        {
-            d = default;   // или = null;
-            return false;
-        }
+        if (_objByType == null) { d = default; return false; }
         return _objByType.TryGetValue(t, out d);
     }
+
     // ===== UPDATE стриминга ====================================================
     private void Update()
     {
@@ -172,7 +198,7 @@ public class CampManager : MonoBehaviour, IWorldSystem
     {
         var list = GetDeterministicCampsForChunk(chunk);
 
-        // 1) Пред-резерв зоны лагерей
+        // 1) Пред-резерв зоны лагерей + зачистка природы
         if (objectManager != null && list != null)
         {
             foreach (var camp in list)
@@ -180,13 +206,13 @@ public class CampManager : MonoBehaviour, IWorldSystem
             foreach (var camp in list)
                 objectManager.RemoveObjectsInCircle(camp.CenterCell, profile.campRadius + reservePadding);
 
-
-            // ⬇️ 2) ПОДСТРАХОВКА: мгновенно перегружаем затронутые чанки
+            // 2) Мгновенно перегружаем затронутые чанки (визуал)
             foreach (var camp in list)
                 ReloadChunksIntersectingCircle(camp.CenterCell, profile.campRadius + reservePadding);
+
         }
 
-        // 3) Теперь обычный спавн визуала лагеря
+        // 3) Спавн визуала лагеря + ПЛАНИРОВАНИЕ NPC (без Instantiate)
         _chunkCamps[chunk] = list;
         foreach (var camp in list) SpawnCampRuntime(camp);
     }
@@ -198,9 +224,9 @@ public class CampManager : MonoBehaviour, IWorldSystem
         _chunkCamps.Remove(chunk);
     }
 
-    // ===== ДЕТЕРМИНИРОВАННАЯ ГЕНЕРАЦИЯ ========================================
+    // ===== ДЕТЕРМИНИСТИЧЕСКАЯ ГЕНЕРАЦИЯ ========================================
 
-    // Возвращает 0..1 лагерей для чанка, детерминированно
+    // Возвращает 0..1 лагерей для чанка
     private List<CampRuntime> GetDeterministicCampsForChunk(Vector2Int chunk)
     {
         var result = new List<CampRuntime>(1);
@@ -212,19 +238,16 @@ public class CampManager : MonoBehaviour, IWorldSystem
         if (!IsAllowedBiome(_biomes.GetBiomeAtPosition(centerCell))) return result;
         if (profile.useNoiseGate && !PassesNoise(centerCell)) return result;
 
-        // 3) мягкая вероятность (50%) — детерминированно
+        // 3) мягкая вероятность (50%)
         if (rng.NextDouble() < 0.5) return result;
 
-        // 4) minDistance — сравним с соседями по детерминированному правилу.
-        // Если есть соседний валидный кандидат ближе minDist и его "хеш" меньше — мы уступаем.
+        // 4) minDistance — сравнение с соседями
         if (!WinsMinDistanceTiebreak(chunk, centerCell, profile.minDistanceBetweenCamps)) return result;
 
-        // победили → создаём рантайм
         result.Add(new CampRuntime { CenterCell = centerCell });
         return result;
     }
 
-    // Детерминированный кандидат центра в чанке (+ rng для этого чанка)
     private bool TryComputeChunkCandidate(Vector2Int chunk, out Vector2Int centerCell, out Random rng)
     {
         int seed = Hash3(worldSeed, profile.seedSalt, chunk.x * 73856093 ^ chunk.y * 19349663);
@@ -238,35 +261,26 @@ public class CampManager : MonoBehaviour, IWorldSystem
         return true;
     }
 
-    // Побеждаем ли мы соседей при учёте minDistance (детерминированный тай-брейк)
-    private bool WinsMinDistanceTiebreak(Vector2Int chunk, Vector2Int myCenter, int minDist)
+    private bool WinsMinDistanceTiebreak(Vector2Int chunk, Vector2Int myCenter, int rChunks)
     {
-        if (minDist <= 0) return true;
+        if (rChunks <= 0) return true;
 
-        int rChunks = Mathf.CeilToInt((minDist + chunkSize - 1) / (float)chunkSize);
+        var myKey = TieBreakKey(chunk);
         for (int dx = -rChunks; dx <= rChunks; dx++)
         {
             for (int dy = -rChunks; dy <= rChunks; dy++)
             {
                 if (dx == 0 && dy == 0) continue;
-                var nb = new Vector2Int(chunk.x + dx, chunk.y + dy);
+                var otherChunk = new Vector2Int(chunk.x + dx, chunk.y + dy);
 
-                // посчитаем соседского кандидата
-                if (!TryComputeChunkCandidate(nb, out var nCenter, out var nbRng)) continue;
+                if (!TryComputeChunkCandidate(otherChunk, out var otherCenter, out _)) continue;
+                if (!IsAllowedBiome(_biomes.GetBiomeAtPosition(otherCenter))) continue;
+                if (profile.useNoiseGate && !PassesNoise(otherCenter)) continue;
+                if (new Vector2Int(otherCenter.x - myCenter.x, otherCenter.y - myCenter.y).sqrMagnitude >
+                    profile.minDistanceBetweenCamps * profile.minDistanceBetweenCamps) continue;
 
-                // те же гейты: биом/шум/вероятность
-                if (!IsAllowedBiome(_biomes.GetBiomeAtPosition(nCenter))) continue;
-                if (profile.useNoiseGate && !PassesNoise(nCenter)) continue;
-                if (nbRng.NextDouble() < 0.5) continue;
-
-                // близко?
-                if ((nCenter - myCenter).sqrMagnitude < minDist * minDist)
-                {
-                    // tie-break: выигрывает меньший "приоритет"
-                    long myKey = TieBreakKey(chunk);
-                    long nbKey = TieBreakKey(nb);
-                    if (nbKey < myKey) return false; // сосед выигрывает → мы отказываемся
-                }
+                var otherKey = TieBreakKey(otherChunk);
+                if (otherKey < myKey) return false;   // сосед выигрывает → мы уступаем
             }
         }
         return true;
@@ -274,7 +288,6 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
     private long TieBreakKey(Vector2Int chunk)
     {
-        // стабильный приоритет: хеш по сид/соль/координаты; при равенстве — лексикографический
         long h = (long)Hash3(worldSeed, profile.seedSalt, chunk.x * 911 + chunk.y * 3571) & 0x7FFFFFFF;
         return (h << 32) ^ ((long)(chunk.x & 0xFFFF) << 16) ^ (uint)(chunk.y & 0xFFFF);
     }
@@ -294,25 +307,22 @@ public class CampManager : MonoBehaviour, IWorldSystem
         return v >= profile.noiseThreshold;
     }
 
-    // ===== Spawn / Despawn =====================================================
+    // ===== Spawn / Despawn (visual for camp, NPC planning only) ===============
 
     private void SpawnCampRuntime(CampRuntime camp)
     {
+        // 0) Резервация и оверрайд спрайтов тайлов
         if (objectManager != null)
             objectManager.ReserveCircle(camp.CenterCell, profile.campRadius + reservePadding);
-        // 0) Резервация и оверрайд спрайтов тайлов
 
         if (GroundSprite != null && profile.campGroundSprite != null)
-        {
             GroundSprite.SetSpriteCircle(camp.CenterCell, profile.campRadius, profile.campGroundSprite);
-        }
 
-        // Перерисовать видимые клетки (без ?. для Unity)
         if (mainTiles != null)
             mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
 
-        // ===== дальше твой спавн структур и NPC — без изменений =====
-        var rngStruct = new System.Random(Hash3(
+        // 1) Спавн структур
+        var rngStruct = new Random(Hash3(
             worldSeed, profile.seedSalt,
             camp.CenterCell.x * 48611 ^ camp.CenterCell.y * 1223
         ));
@@ -334,28 +344,23 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
                     GameObject go = data.prefabOverride != null
                         ? Instantiate(data.prefabOverride, transform)
-                        : (objectsPool != null ? objectsPool.Get(s.type) : null);
+                        : (objectsPool != null ? objectsPool.Get(data.type) : new GameObject($"{s.type}"));
 
-                    if (go == null)
-                    {
-                        go = new GameObject($"Camp_{s.type}");
-                        go.transform.SetParent(transform, false);
-                        go.AddComponent<SpriteRenderer>();
-                    }
+                    go.transform.position = CellToWorld(cellPos)
+                                          + (Vector3)data.pivotOffsetWorld
+                                          + ((data.tags & ObjectTags.HighSprite) != 0
+                                                ? Vector3.up * data.visualHeightUnits
+                                                : Vector3.zero);
 
-                    var wpos = CellToWorld(cellPos);
-                    wpos.x += data.pivotOffsetWorld.x;
-                    wpos.y += data.pivotOffsetWorld.y + data.visualHeightUnits;
-                    go.transform.position = wpos;
                     SetZByY(go.transform);
 
-                    var sr = go.GetComponentInChildren<SpriteRenderer>(true) ?? go.AddComponent<SpriteRenderer>();
+                    var sr = go.GetComponentInChildren<SpriteRenderer>() ?? go.AddComponent<SpriteRenderer>();
                     if (data.spriteVariants != null && data.spriteVariants.Length > 0)
                     {
                         int key = Hash3(worldSeed, (int)s.type, cellPos.x * 48611 ^ cellPos.y * 1223);
                         int idx = Mathf.Abs(key) % data.spriteVariants.Length;
                         var sprite = data.spriteVariants[idx];
-                        if (sprite != null) sr.sprite = sprite;
+                        if (sprite) sr.sprite = sprite;
                     }
                     sr.sortingLayerID = SortingLayer.NameToID("Objects");
 
@@ -367,79 +372,283 @@ public class CampManager : MonoBehaviour, IWorldSystem
             }
         }
 
+        // 2) NPC — ТОЛЬКО ПЛАНИРОВАНИЕ (без Instantiate)
         var GOLDEN32 = unchecked((int)0x9E3779B9u);
-        var rngNpc = new System.Random(Hash3(
+        var rngNpc = new Random(Hash3(
             worldSeed, profile.seedSalt ^ GOLDEN32,
             camp.CenterCell.x * 7349 ^ camp.CenterCell.y * 3163
         ));
 
-        if (profile.npcRoles != null)
+        camp.PlannedNpcs.Clear();
+
+        if (profile != null && profile.npcPack != null &&
+            profile.npcPack.entries != null && profile.npcPack.entries.Count > 0)
         {
-            foreach (var role in profile.npcRoles)
-            {
-                int target = Mathf.Clamp(NextRange(rngNpc, role.countRange.x, role.countRange.y), 0, 999);
-                var positions = PickNpcPositionsDet(camp.CenterCell, role, camp.Structures, rngNpc, target);
-
-                int spawned = 0;
-                foreach (var cellPos in positions)
-                {
-                    if (spawned >= target) break;
-                    if (role.prefab == null) continue;
-
-                    var npc = Instantiate(role.prefab, transform);
-                    npc.transform.position = CellToWorld(cellPos);
-                    SetZByY(npc.transform);
-                    camp.Npcs.Add(npc);
-                    spawned++;
-                }
-            }
+            PlanNpcPack(camp, rngNpc);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (verboseLogs)
+                Debug.Log($"[CampManager] Planned NPCs from npcPack: {camp.PlannedNpcs.Count}");
+#endif
+        }
+        else if (profile != null && profile.npcRoles != null)
+        {
+            PlanNpcLegacy(camp, rngNpc);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (verboseLogs)
+                Debug.Log($"[CampManager] Planned NPCs (legacy roles): {camp.PlannedNpcs.Count}");
+#endif
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (verboseLogs)
-            Debug.Log($"[CampManager] Spawn camp at {camp.CenterCell}. totalActive={ActiveCampCount}");
+            Debug.Log($"[CampManager] Spawn camp (visual only) at {camp.CenterCell}. totalActive={ActiveCampCount}");
 #endif
     }
 
     private void DespawnCampRuntime(CampRuntime camp)
-{
-    // 0) Снять оверрайд спрайтов и резервацию
-    if (GroundSprite != null)
-        GroundSprite.ClearSpriteCircle(camp.CenterCell, profile.campRadius);
-
-    if (Reservation != null)
     {
-        Reservation.ReleaseCircle(
-            camp.CenterCell,
-            profile.campRadius + reservationPadding,
-            ReservationMask.Nature | ReservationMask.Camps
-        );
+        // 0) Снять оверрайд спрайтов и резервацию
+        if (GroundSprite != null)
+            GroundSprite.ClearSpriteCircle(camp.CenterCell, profile.campRadius);
+
+        if (Reservation != null)
+        {
+            Reservation.ReleaseCircle(
+                camp.CenterCell,
+                profile.campRadius + reservationPadding,
+                ReservationMask.Nature | ReservationMask.Camps
+            );
+        }
+
+        if (mainTiles != null)
+            mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
+
+        // 1) Ковёр
+        if (camp.GroundPatch) Destroy(camp.GroundPatch);
+        camp.GroundPatch = null;
+
+        // 2) Структуры
+        foreach (var go in camp.Structures)
+        {
+            if (!go) continue;
+            if (objectsPool != null) objectsPool.Release(go);
+            else Destroy(go);
+        }
+        camp.Structures.Clear();
+
+        // 3) NPC (только данные)
+        camp.PlannedNpcs.Clear();
     }
 
-    // Перерисовать видимые клетки
-    if (mainTiles != null)
-        mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
+    // ===== NPC PLANNING (no instantiation) ====================================
 
-    // 1) Ковёр (если использовался)
-    if (camp.GroundPatch) Destroy(camp.GroundPatch);
-    camp.GroundPatch = null;
-
-    // 2) Структуры
-    foreach (var go in camp.Structures)
+    private void PlanNpcPack(CampRuntime camp, Random rng)
     {
-        if (!go) continue;
-        if (objectsPool != null) objectsPool.Release(go);
-        else Destroy(go);
+        var pack = profile.npcPack;
+        if (pack == null || pack.entries == null || pack.entries.Count == 0) return;
+
+        int campId = Hash3(worldSeed, profile.seedSalt, camp.CenterCell.x * 101 + camp.CenterCell.y * 997);
+        var occupied = new List<Vector2Int>(16);
+
+        foreach (var entry in pack.entries)
+        {
+            var npcProfile = entry.profile; // Game.World.NPC.NPCProfile
+            if (npcProfile == null) continue; // для планирования обязателен профиль
+
+            int target = Mathf.Clamp(NextRange(rng, entry.count.x, entry.count.y), 0, 999);
+            if (target <= 0) continue;
+
+            var points = PickNpcPositionsFromEntry(camp.CenterCell, profile.campRadius, entry, camp.Structures, rng, target, occupied);
+
+            for (int i = 0; i < points.Count && i < target; i++)
+            {
+                var cell = points[i];
+                var id = MakePlannedNpcId(campId, cell);
+                camp.PlannedNpcs.Add(new PlannedNpc { id = id, cell = cell, profile = npcProfile, campId = campId });
+                occupied.Add(cell);
+            }
+        }
     }
-    camp.Structures.Clear();
 
-    // 3) NPC
-    foreach (var npc in camp.Npcs)
-        if (npc) Destroy(npc);
-    camp.Npcs.Clear();
-}
+    private void PlanNpcLegacy(CampRuntime camp, Random rng)
+    {
+        if (profile.npcRoles == null) return;
 
-    // ===== Layout helpers (детерминированные) ==================================
+        int campId = Hash3(worldSeed, profile.seedSalt, camp.CenterCell.x * 101 + camp.CenterCell.y * 997);
+
+        foreach (var role in profile.npcRoles)
+        {
+            int target = Mathf.Clamp(NextRange(rng, role.countRange.x, role.countRange.y), 0, 999);
+            if (target <= 0) continue;
+
+            var positions = PickNpcPositionsDet(camp.CenterCell, role, camp.Structures, rng, target);
+            for (int i = 0; i < positions.Count && i < target; i++)
+            {
+                var cell = positions[i];
+                // В legacy CampNpcRole хранит prefab GameObject, а не NPCProfile — поэтому профиля может не быть.
+                // PoolingNPC должен пропускать записи без profile.
+                var id = MakePlannedNpcId(campId, cell);
+                camp.PlannedNpcs.Add(new PlannedNpc { id = id, cell = cell, profile = null, campId = campId });
+            }
+        }
+    }
+
+    // Публичный API для PoolingNPC: получить запланированных NPC в радиусе
+    public int GatherPlannedNpcsWithinRadius(Vector2Int centerCell, int radiusCells, List<PlannedNpc> buffer)
+    {
+        buffer.Clear();
+        int r2 = radiusCells * radiusCells;
+        foreach (var kv in _chunkCamps)
+        {
+            var camps = kv.Value;
+            for (int i = 0; i < camps.Count; i++)
+            {
+                var list = camps[i].PlannedNpcs;
+                for (int j = 0; j < list.Count; j++)
+                {
+                    var p = list[j];
+                    var d = p.cell - centerCell;
+                    if (d.sqrMagnitude <= r2) buffer.Add(p);
+                }
+            }
+        }
+        return buffer.Count;
+    }
+
+    // Подбор позиций под одну запись пакета (оставлено без изменений)
+    private List<Vector2Int> PickNpcPositionsFromEntry(
+        Vector2Int centerCell, int campRadius,
+        NPCSpawnList.Entry entry,
+        List<GameObject> structures,
+        Random rng, int target,
+        List<Vector2Int> occupied
+    )
+    {
+        var res = new List<Vector2Int>(target);
+        float spacing = Mathf.Max(0f, entry.spacing);
+        float spacing2 = spacing * spacing;
+        int ringR = Mathf.Clamp(entry.radiusFromCenter > 0 ? Mathf.RoundToInt(entry.radiusFromCenter)
+                                                          : Mathf.Max(1, campRadius - 1),
+                                1, Mathf.Max(1, campRadius));
+
+        bool FarEnough(Vector2Int p)
+        {
+            for (int i = 0; i < res.Count; i++) if ((res[i] - p).sqrMagnitude < spacing2) return false;
+            for (int i = 0; i < occupied.Count; i++) if ((occupied[i] - p).sqrMagnitude < spacing2) return false;
+            return true;
+        }
+
+        switch (entry.anchor)
+        {
+            case NPCSpawnList.SpawnAnchor.Center:
+                {
+                    int tries = target * 8;
+                    while (res.Count < target && tries-- > 0)
+                    {
+                        var jitter = new Vector2Int(
+                            Mathf.RoundToInt((float)((rng.NextDouble() - 0.5) * 2.0)),
+                            Mathf.RoundToInt((float)((rng.NextDouble() - 0.5) * 2.0))
+                        );
+                        var p = centerCell + jitter;
+                        if (FarEnough(p)) res.Add(p);
+                    }
+                    break;
+                }
+            case NPCSpawnList.SpawnAnchor.Perimeter:
+                {
+                    int count = Math.Max(1, target);
+                    for (int i = 0; i < count && res.Count < target; i++)
+                    {
+                        double ang = (i / (double)count) * Math.PI * 2.0 + (rng.NextDouble() - 0.5) * 0.3;
+                        var p = centerCell + new Vector2Int(
+                            Mathf.RoundToInt(ringR * Mathf.Cos((float)ang)),
+                            Mathf.RoundToInt(ringR * Mathf.Sin((float)ang))
+                        );
+                        if (FarEnough(p)) res.Add(p);
+                    }
+                    int tries = target * 8;
+                    while (res.Count < target && tries-- > 0)
+                    {
+                        double ang = rng.NextDouble() * Math.PI * 2.0;
+                        var p = centerCell + new Vector2Int(
+                            Mathf.RoundToInt(ringR * Mathf.Cos((float)ang)),
+                            Mathf.RoundToInt(ringR * Mathf.Sin((float)ang))
+                        );
+                        if (FarEnough(p)) res.Add(p);
+                    }
+                    break;
+                }
+            case NPCSpawnList.SpawnAnchor.Tents:
+                {
+                    foreach (var sgo in structures)
+                    {
+                        if (!sgo) continue;
+                        if (sgo.name.IndexOf("Tent", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                        var c = WorldToCell(sgo.transform.position);
+                        var dir = c - centerCell; if (dir == Vector2Int.zero) dir = new Vector2Int(1, 0);
+                        var off = new Vector2Int(Mathf.Clamp(dir.x, -1, 1), Mathf.Clamp(dir.y, -1, 1));
+                        var p = c + off;
+                        if (FarEnough(p)) res.Add(p);
+                        if (res.Count >= target) break;
+                    }
+                    int tries = target * 8;
+                    while (res.Count < target && tries-- > 0)
+                    {
+                        var p = centerCell + RandInCircleDet(Mathf.Max(1, campRadius - 1), rng);
+                        if (FarEnough(p)) res.Add(p);
+                    }
+                    break;
+                }
+            case NPCSpawnList.SpawnAnchor.Fire:
+                {
+                    Vector2Int anchor = centerCell;
+                    foreach (var sgo in structures)
+                    {
+                        if (!sgo) continue;
+                        var name = sgo.name;
+                        if (name.IndexOf("Fire", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            name.IndexOf("Campfire", StringComparison.OrdinalIgnoreCase) >= 0)
+                        { anchor = WorldToCell(sgo.transform.position); break; }
+                    }
+                    int tries = target * 8;
+                    while (res.Count < target && tries-- > 0)
+                    {
+                        var p = anchor + RandInCircleDet(2, rng);
+                        if (FarEnough(p)) res.Add(p);
+                    }
+                    break;
+                }
+            case NPCSpawnList.SpawnAnchor.Gate:
+                {
+                    Vector2Int anchor = centerCell;
+                    foreach (var sgo in structures)
+                    {
+                        if (!sgo) continue;
+                        if (sgo.name.IndexOf("Gate", StringComparison.OrdinalIgnoreCase) >= 0)
+                        { anchor = WorldToCell(sgo.transform.position); break; }
+                    }
+                    int tries = target * 8;
+                    while (res.Count < target && tries-- > 0)
+                    {
+                        var p = anchor + RandInCircleDet(2, rng);
+                        if (FarEnough(p)) res.Add(p);
+                    }
+                    break;
+                }
+            default: // Any
+                {
+                    int tries = target * 16;
+                    while (res.Count < target && tries-- > 0)
+                    {
+                        var p = centerCell + RandInCircleDet(Mathf.Max(1, campRadius - 1), rng);
+                        if (FarEnough(p)) res.Add(p);
+                    }
+                    break;
+                }
+        }
+        return res;
+    }
 
     private List<Vector2Int> PickStructurePositionsDet(Vector2Int centerCell, int count, CampProfile.CampStructure s, Random rng)
     {
@@ -556,6 +765,7 @@ public class CampManager : MonoBehaviour, IWorldSystem
         int cy = cell.y >= 0 ? cell.y / chunkSize : (cell.y - (chunkSize - 1)) / chunkSize;
         return new Vector2Int(cx, cy);
     }
+
     private Vector2Int ChunkToWorldCell(Vector2Int chunk) => new(chunk.x * chunkSize + chunkSize / 2, chunk.y * chunkSize + chunkSize / 2);
 
     private HashSet<Vector2Int> WantedChunks(Vector2Int center, int r)
@@ -570,13 +780,11 @@ public class CampManager : MonoBehaviour, IWorldSystem
     private static int NextRange(Random rng, int minInclusive, int maxInclusive)
     {
         if (minInclusive > maxInclusive) (minInclusive, maxInclusive) = (maxInclusive, minInclusive);
-        // Random.Next(a, bExclusive)
         return rng.Next(minInclusive, maxInclusive + 1);
     }
 
     private static Vector2Int RandInCircleDet(int radius, Random rng)
     {
-        // равномерно по кругу для наших целочисленных координат
         double ang = rng.NextDouble() * Math.PI * 2.0;
         double rad = rng.NextDouble() * radius;
         return new Vector2Int(
@@ -593,12 +801,28 @@ public class CampManager : MonoBehaviour, IWorldSystem
         t.position = p;
     }
 
-    // Рантайм-данные лагеря
-    private class CampRuntime
+    private static ulong MakePlannedNpcId(int campId, Vector2Int cell)
     {
-        public Vector2Int CenterCell;
-        public GameObject GroundPatch;
-        public readonly List<GameObject> Structures = new();
-        public readonly List<GameObject> Npcs = new();
+        unchecked
+        {
+            uint h = (uint)campId;
+            h ^= (uint)(cell.x * 73856093) ^ (uint)(cell.y * 19349663);
+            h ^= 0x9E3779B9u;
+            return ((ulong)h << 32) | (uint)((cell.x & 0xFFFF) << 16 | (cell.y & 0xFFFF));
+        }
     }
 }
+
+// Оставляем утилиту для визуала — пригодится при спавне в PoolingNPC
+public class NpcVisualApplier : MonoBehaviour
+{
+    public void Apply(NPCProfile profile)
+    {
+        if (profile && profile.skin && profile.skin.baseSprite)
+        {
+            var sr = GetComponentInChildren<SpriteRenderer>() ?? gameObject.AddComponent<SpriteRenderer>();
+            sr.sprite = profile.skin.baseSprite;
+        }
+    }
+}
+

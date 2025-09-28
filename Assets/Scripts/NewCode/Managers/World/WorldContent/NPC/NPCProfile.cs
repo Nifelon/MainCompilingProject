@@ -16,7 +16,10 @@ namespace Game.World.NPC
     {
         [Header("NPC Role & Behavior")]
         public NpcRole role = NpcRole.Guard;
+        public GameObject prefab;
         public NpcTags npcTags;
+        [Header("Visual")]
+        public NpcSkin skin;
         public SpawnAnchor preferredAnchor = SpawnAnchor.Center;
         public float leashRadius = 15f;
         public float wanderRadius = 5f;

@@ -1,98 +1,115 @@
 using System;
 using UnityEngine;
-using Game.World.Map.Biome;
-using Game.World.Objects; // ObjectType
+using Game.World.Map.Biome;   // BiomeType
+using Game.World.Objects;     // ObjectType
+using Game.World.NPC;         // NPCSpawnList
+
 namespace Game.World.Camps
 {
     [CreateAssetMenu(menuName = "World/Settlement/Camp Profile", fileName = "CampProfile_Default")]
     public class CampProfile : ScriptableObject
     {
+        // ---------- Spawn Conditions ----------
         [Header("Spawn Conditions")]
         [Tooltip("В каких биомах допустим лагерь.")]
         public BiomeType[] allowedBiomes = { BiomeType.Forest, BiomeType.Plains };
 
-        [Tooltip("Целевое кол-во лагерей на мир (ориентир).")]
+        [Tooltip("Ориентир по количеству лагерей в мире (нежёсткое).")]
         public int targetCamps = 6;
 
-        [Tooltip("Мин. дистанция между лагерями (клетки).")]
+        [Tooltip("Мин. дистанция между лагерями (в клетках).")]
         public int minDistanceBetweenCamps = 80;
 
-        [Tooltip("Использовать шум, чтобы не в каждом месте появлялся лагерь.")]
+        [Tooltip("Использовать шумовую маску, чтобы лагерь появлялся не в каждой подходящей точке.")]
         public bool useNoiseGate = true;
 
         [Range(0.001f, 0.05f)] public float noiseScale = 0.01f;
         [Range(0f, 1f)] public float noiseThreshold = 0.50f;
 
-        [Tooltip("Доп. соль к мировому сидy (чтобы разные типы лагерей получали разные паттерны).")]
+        [Tooltip("Дополнительная соль к мировому сидy (для разведения паттернов разных профилей).")]
         public int seedSalt = 137;
 
+        // ---------- Shape / Layout ----------
         [Header("Shape / Layout")]
-        [Tooltip("Радиус лагеря в клетках (зона резервации и земля-оверрайд).")]
+        [Tooltip("Радиус лагеря в клетках (зона резервации, грунт, раскладка).")]
         [Min(2)] public int campRadius = 8;
+
+        [Header("Wildlife / Spawn Control")]
+        [Min(0)] public int creaturesNoSpawnRadius = 12;
 
         public LayoutMode layout = LayoutMode.Radial;
         public enum LayoutMode { Radial, Grid }
 
-        [Tooltip("Минимальный отступ от центра/друг друга при раскладке (в клетках).")]
+        [Tooltip("Минимальный отступ при раскладке (в клетках).")]
         [Min(0)] public int layoutPadding = 2;
 
+        // ---------- Ground Override ----------
         [Header("Ground Override (visual)")]
-        [Tooltip("Спрайт 'протоптанной земли' на территории лагеря.")]
+        [Tooltip("Спрайт 'протоптанной земли' внутри лагеря.")]
         public Sprite campGroundSprite;
 
-        [Tooltip("Как наносить грунт: Круг по радиусу лагеря или Маской компоновки.")]
+        [Tooltip("Как наносить грунт: круг по радиусу лагеря или только по маске раскладки.")]
         public GroundMode groundMode = GroundMode.Circle;
         public enum GroundMode { Circle, LayoutMaskOnly }
 
+        // ---------- Structures ----------
         [Header("Composition (Structures)")]
-        [Tooltip("Список 'каких объектов и сколько' ставить внутри лагеря.")]
+        [Tooltip("Какие объекты и в каком количестве разместить внутри лагеря.")]
         public CampStructure[] structures;
-
-        [Header("NPC")]
-        [Tooltip("Список ролей NPC (солдаты/командир и т.п.).")]
-        public CampNpcRole[] npcRoles;
-
-        [Header("Debug/Flags")]
-        [Tooltip("Разрешить накладывать лагерь поверх уже сгенерированных природных объектов (обычно false).")]
-        public bool allowOverlapWithNature = false;
 
         [Serializable]
         public class CampStructure
         {
             public ObjectType type = ObjectType.TentSmall;
-            [Tooltip("Сколько штук; если min!=max — берём случайное в диапазоне.")]
-            public Vector2Int countRange = new Vector2Int(4, 4);
 
-            [Tooltip("Варианты спрайтов (индекс). -1 = случайный.")]
+            [Tooltip("Сколько штук (min..max, включительно).")]
+            public Vector2Int countRange = new(4, 4);
+
+            [Tooltip("Фиксированный вариант спрайта (-1 = случайный).")]
             public int variantIndex = -1;
 
-            [Tooltip("Как распределять этот тип внутри лагеря.")]
+            [Tooltip("Схема раскладки данного типа.")]
             public Distribution dist = Distribution.Ring;
             public enum Distribution { Center, Ring, InnerRing, Grid, RandomScatter }
 
-            [Tooltip("Смещение от центра для типа (в клетках).")]
+            [Tooltip("Смещение кольца от центра (в клетках).")]
             public int ringOffset = 0;
 
-            [Tooltip("Минимальная дистанция до объектов того же типа (клетки).")]
-            public float minDistanceSameType = 1.0f;
+            [Tooltip("Мин. дистанция до объектов этого же типа (в клетках).")]
+            public float minDistanceSameType = 1f;
         }
+
+        // ---------- NPC (Assets-first) ----------
+        [Header("NPC (Assets)")]
+        [Tooltip("Новый способ: состав лагеря через ассет-пак. Если заполнен — используется он.")]
+        public NPCSpawnList npcPack;
+
+        // ---------- NPC (Legacy fallback) ----------
+        [Header("NPC (Legacy)")]
+        [Tooltip("Старый способ — прямой список ролей с префабами. Используется, если npcPack не задан.")]
+        public CampNpcRole[] npcRoles;
 
         [Serializable]
         public class CampNpcRole
         {
             public string roleName = "Soldier";
             public GameObject prefab;
-            public Vector2Int countRange = new Vector2Int(3, 3);
+            public Vector2Int countRange = new(3, 3);
 
-            [Tooltip("Распределение вокруг центра.")]
+            [Tooltip("Схема раскладки вокруг центра.")]
             public NpcDistribution dist = NpcDistribution.Ring;
             public enum NpcDistribution { Center, Ring, GuardPerTent, Random }
 
-            [Tooltip("Радиус/отступ от центра (клетки).")]
+            [Tooltip("Радиус/отступ от центра (в клетках) для Ring.")]
             public int radius = 6;
 
-            [Tooltip("Если GuardPerTent — отступ от палатки (в клетках).")]
-            public Vector2Int guardOffset = new Vector2Int(1, 0);
+            [Tooltip("Смещение от палатки для GuardPerTent (в клетках).")]
+            public Vector2Int guardOffset = new(1, 0);
         }
+
+        // ---------- Debug / Flags ----------
+        [Header("Debug/Flags")]
+        [Tooltip("Позволять накладывать лагерь поверх природы (обычно false — мы чистим природу и резервируем клетки).")]
+        public bool allowOverlapWithNature = false;
     }
 }

@@ -10,11 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ca9e9fdf455cedf448eed8527c0e5bb0, type: 3}
-  m_Name: npc_commander_bandits
+  m_Name: npc_soldier_neutral
   m_EditorClassIdentifier: 
-  id: 
-  displayName: 
-  prefab: {fileID: 0}
+  id: npc.neutral.guard.soldier.v1
+  displayName: "\u0421\u043E\u043B\u0434\u0430\u0442"
   portrait: {fileID: 0}
   faction: 0
   tags: 0
@@ -32,7 +31,8 @@ MonoBehaviour:
   loot: []
   role: 0
   npcTags: 0
-  preferredAnchor: 1
+  skin: {fileID: 11400000, guid: fd44cf77f532b6e4d8a0c9ab87c39b8d, type: 2}
+  preferredAnchor: 5
   leashRadius: 15
   wanderRadius: 5
   patrolSpeedMul: 1
@@ -41,5 +41,5 @@ MonoBehaviour:
   dialogueRef: {fileID: 0}
   isTrader: 0
   traderInventoryId: 0
-  isQuestGiver: 0
+  isQuestGiver: 1
   voiceSet: []

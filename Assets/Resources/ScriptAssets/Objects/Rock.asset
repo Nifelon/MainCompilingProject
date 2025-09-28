@@ -25,7 +25,6 @@ MonoBehaviour:
   spriteVariants:
   - {fileID: 5216165628507451453, guid: 88556f7708fee81458b44f5bddd2988d, type: 3}
   - {fileID: -8663026579778697312, guid: 88556f7708fee81458b44f5bddd2988d, type: 3}
-  - {fileID: 6454087610443785282, guid: 88556f7708fee81458b44f5bddd2988d, type: 3}
   prefabOverride: {fileID: 0}
   harvest:
     harvestable: 0
