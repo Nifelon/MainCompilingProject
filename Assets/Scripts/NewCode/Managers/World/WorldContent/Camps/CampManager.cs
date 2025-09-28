@@ -7,6 +7,7 @@ using Game.World.Map.Biome;          // IBiomeService, BiomeType
 using Game.World.Objects;            // ObjectType (из профилей)
 using Game.World.Camps;              // CampProfile
 using Game.World.NPC;                // NPCProfile, NPCSpawnList
+//using Game.World.Content.Services;   // IReservationService, ReservationMask
 using Random = System.Random;
 
 [DefaultExecutionOrder(-230)]
@@ -39,6 +40,7 @@ public class CampManager : MonoBehaviour, IWorldSystem
     private IGroundSpriteService GroundSprite;
     [SerializeField] private MonoBehaviour reservationRef;    // IReservationService
     [SerializeField] private PoolManagerMainTile mainTiles;   // стример тайлов
+    [SerializeField] private float cellSize = 1f; // world units per cell
 
     private IReservationService Reservation;
 
@@ -223,17 +225,29 @@ public class CampManager : MonoBehaviour, IWorldSystem
         var list = GetDeterministicCampsForChunk(chunk);
 
         // 1) Пред-резерв зоны лагерей + зачистка природы
-        if (objectManager != null && list != null)
+        if (list != null)
         {
-            foreach (var camp in list)
-                objectManager.ReserveCircle(camp.CenterCell, profile.campRadius + reservePadding);
-            foreach (var camp in list)
-                objectManager.RemoveObjectsInCircle(camp.CenterCell, profile.campRadius + reservePadding);
+            // резервируем через ReservationService (в клетках)
+            if (Reservation != null)
+            {
+                foreach (var camp in list)
+                    Reservation.ReserveCircle(camp.CenterCell, profile.campRadius + reservePadding, ReservationMask.All);
+            }
+
+            // чистим уже заспавнённые объекты (переводим клетку → world units)
+            if (objectManager != null)
+            {
+                foreach (var camp in list)
+                {
+                    var centerW = new Vector2(camp.CenterCell.x * cellSize, camp.CenterCell.y * cellSize);
+                    var rW = (profile.campRadius + reservePadding) * cellSize;
+                    objectManager.RemoveObjectsInCircle(centerW, rW);
+                }
+            }
 
             // 2) Мгновенно перегружаем затронутые чанки (визуал)
             foreach (var camp in list)
                 ReloadChunksIntersectingCircle(camp.CenterCell, profile.campRadius + reservePadding);
-
         }
 
         // 3) Спавн визуала лагеря + ПЛАНИРОВАНИЕ NPC (без Instantiate)
@@ -337,8 +351,8 @@ public class CampManager : MonoBehaviour, IWorldSystem
     private void SpawnCampRuntime(CampRuntime camp)
     {
         // 0) Резервация и оверрайд спрайтов тайлов
-        if (objectManager != null)
-            objectManager.ReserveCircle(camp.CenterCell, profile.campRadius + reservePadding);
+        if (Reservation != null)
+            Reservation.ReserveCircle(camp.CenterCell, profile.campRadius + reservePadding, ReservationMask.All);
 
         if (GroundSprite != null && profile.campGroundSprite != null)
             GroundSprite.SetSpriteCircle(camp.CenterCell, profile.campRadius, profile.campGroundSprite);
@@ -824,7 +838,7 @@ public class CampManager : MonoBehaviour, IWorldSystem
             uint h = (uint)campId;
             h ^= (uint)(cell.x * 73856093) ^ (uint)(cell.y * 19349663);
             h ^= 0x9E3779B9u;
-            return ((ulong)h << 32) | (uint)((cell.x & 0xFFFF) << 16 | (cell.y & 0xFFFF));
+            return ((ulong)h << 32) | (uint)((cell.x & 0xFFFF) << 16) | (uint)(cell.y & 0xFFFF);
         }
     }
 }
@@ -841,4 +855,3 @@ public class NpcVisualApplier : MonoBehaviour
         }
     }
 }
-
