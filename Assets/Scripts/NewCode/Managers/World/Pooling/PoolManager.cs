@@ -100,7 +100,7 @@ public class PoolManager : MonoBehaviour
         {
             _lastCell = cell;
             RefreshAround(cell);          // тайлы
-            RefreshObjectChunks(cell);    // объекты
+            //RefreshObjectChunks(cell);    // объекты
         }
 
         // Быстрый отладчик: показать биом под игроком
@@ -125,8 +125,8 @@ public class PoolManager : MonoBehaviour
         RefreshAround(_lastCell);
 
         // Полный ресет стриминга объектов
-        UnloadAllObjectChunks();
-        RefreshObjectChunks(_lastCell);
+        //UnloadAllObjectChunks();
+        //RefreshObjectChunks(_lastCell);
     }
 
 

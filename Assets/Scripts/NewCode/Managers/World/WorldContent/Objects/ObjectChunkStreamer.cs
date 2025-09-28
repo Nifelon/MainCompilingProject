@@ -13,29 +13,35 @@ namespace Game.World.Objects.Streaming
         [Header("Refs")]
         [SerializeField] private Transform player;
         [SerializeField] private ObjectManager objectManager;
+        [Tooltip("Источник радиуса/размера клетки тайлов — PoolManager (не PoolManagerMainTile).")]
+        [SerializeField] private PoolManager tiles;
 
         [Header("Units (как у тайлов)")]
-        [Tooltip("Размер клетки в world units")]
+        [Tooltip("Размер клетки в world units (будет переопределён значением из PoolManager, если он задан).")]
         [SerializeField] private float cellSize = 1f;
-
-        [Tooltip("Радиус окна в КЛЕТКАХ (как у тайлов). Желательно прокинуть тот же, что в PoolManagerMainTile).")]
+        [Tooltip("Радиус окна в КЛЕТКАХ (будет переопределён значением из PoolManager, если он задан).")]
         [SerializeField] private int tileRadius = 64;
-        [SerializeField] private PoolManager tiles; // опционально, но лучше заполни в инспекторе
 
         [Header("Objects (чанки)")]
         [Tooltip("Размер чанка объектов в КЛЕТКАХ (должен совпадать с ObjectManager.ChunkSize).")]
         [SerializeField] private int objectsChunkSize = 64;
 
-        [Header("Hysteresis (зона удержания побольше, чтобы не щёлкало)")]
-        [SerializeField] private int loadPaddingCells = 8;   // +N клеток к радиусу при загрузке
-        [SerializeField] private int keepPaddingCells = 12;  // +N клеток к радиусу при удержании
+        [Header("Hysteresis")]
+        [Tooltip("+N клеток к радиусу для загрузки (0 — точное совпадение с тайлами)")]
+        [SerializeField] private int loadPaddingCells = 0;
+        [Tooltip("+N клеток к радиусу для удержания (0 — точное совпадение с тайлами)")]
+        [SerializeField] private int keepPaddingCells = 0;
 
-        private Vector2 _lastWorldCenter;
-        private bool _firstTick = true;
+        [Header("Behavior")]
+        [Tooltip("Периодическая подстраховка обновления (сек). 0 — отключить таймер.")]
+        [SerializeField] private float refreshInterval = 0.15f;
+        [SerializeField] private bool verbose = true;
 
         // runtime
         private readonly HashSet<ulong> _active = new();
-        private Vector2Int _lastCenterChunk = new(int.MinValue, int.MinValue);
+        private Vector2 _lastWorldCenter;
+        private float _refreshTimer;
+        private bool _firstTick = true;
 
         void Reset()
         {
@@ -47,9 +53,10 @@ namespace Game.World.Objects.Streaming
 
         void Awake()
         {
-
             if (!objectManager) objectManager = FindFirstObjectByType<ObjectManager>();
-            if (objectManager) objectsChunkSize = objectManager.ChunkSize;
+            if (objectManager && (objectsChunkSize <= 0 || objectsChunkSize != objectManager.ChunkSize))
+                objectsChunkSize = objectManager.ChunkSize;
+
             WorldSignals.OnWorldRegen += OnWorldRegen;
         }
 
@@ -63,19 +70,21 @@ namespace Game.World.Objects.Streaming
             if (!player || !objectManager) return;
 
             // 1) синхронизируем единицы и радиус с тайлами (если ссылка задана)
-            if (tiles != null) 
-            {     
-            
+            if (tiles != null)
+            {
                 tileRadius = tiles.RadiusCells;   // геттеры из PoolManager
                 cellSize = tiles.CellSizeWorld;
             }
+
             // 2) центр круга в мире
             Vector2 c = player.position;
 
-            // 3) обновляем стриминг, если это первый тик или игрок сдвинулся ≥ ~0.5 клетки
+            // 3) обновлять: первый кадр, смещение ≥ 0.5 клетки, либо по таймеру
             float move2 = (c - _lastWorldCenter).sqrMagnitude;
             float thr2 = (cellSize * 0.5f) * (cellSize * 0.5f);
-            if (_firstTick || move2 >= thr2)
+            _refreshTimer += Time.deltaTime;
+
+            if (_firstTick || move2 >= thr2 || (refreshInterval > 0f && _refreshTimer >= refreshInterval))
             {
                 var centerCell = WorldToCell(c);
                 var centerChunk = new Vector2Int(
@@ -83,20 +92,31 @@ namespace Game.World.Objects.Streaming
                     DivFloor(centerCell.y, objectsChunkSize)
                 );
 
-                Refresh(centerChunk, c);
+                int loaded = Refresh(centerChunk, c);
+
+                // DIAG: если ничего не загрузили и совсем пусто — форсим центральный чанк
+                if (loaded == 0 && _active.Count == 0)
+                {
+                    var key = ChunkKey(centerChunk);
+                    objectManager.LoadChunkVisuals(ToCoord(key));
+                    _active.Add(key);
+                    if (verbose)
+                        Debug.LogWarning($"[ObjectChunkStreamer] Forced-load center chunk {centerChunk} (tileRadius={tileRadius}, cellSize={cellSize}, chunkSize={objectsChunkSize}).");
+                }
 
                 _lastWorldCenter = c;
+                _refreshTimer = 0f;
                 _firstTick = false;
             }
         }
 
         // === core ===
-        private void Refresh(Vector2Int centerChunk, Vector2 centerWorld)
+        private int Refresh(Vector2Int centerChunk, Vector2 centerWorld)
         {
             float loadR = (tileRadius + loadPaddingCells) * cellSize;
             float keepR = (tileRadius + keepPaddingCells) * cellSize;
 
-            // сколько чанков осматривать вокруг (по таксу на удержание)
+            // сколько чанков осматривать вокруг (по зоне удержания)
             int R = Mathf.CeilToInt((tileRadius + keepPaddingCells) / (float)objectsChunkSize) + 1;
 
             var shouldLoad = new HashSet<ulong>();
@@ -107,22 +127,25 @@ namespace Game.World.Objects.Streaming
                 {
                     var ch = new Vector2Int(centerChunk.x + dx, centerChunk.y + dy);
 
-                    Rect rect = ChunkRectWorld(ch);
+                    Rect rect = ChunkRectWorld(ch);     // world units
                     ulong key = ChunkKey(ch);
 
                     if (CircleIntersectsRect(centerWorld, loadR, rect)) shouldLoad.Add(key);
                     if (CircleIntersectsRect(centerWorld, keepR, rect)) shouldKeep.Add(key);
                 }
 
-            // SPAWN: всё, что нужно держать и ещё не активно
+            int loaded = 0;
+
+            // SPAWN
             foreach (var key in shouldLoad)
             {
                 if (_active.Contains(key)) continue;
                 objectManager.LoadChunkVisuals(ToCoord(key));
                 _active.Add(key);
+                loaded++;
             }
 
-            // DESPAWN: всё, что активно, но больше не нужно удерживать
+            // DESPAWN
             var toKill = new List<ulong>();
             foreach (var key in _active)
             {
@@ -133,6 +156,11 @@ namespace Game.World.Objects.Streaming
                 }
             }
             for (int i = 0; i < toKill.Count; i++) _active.Remove(toKill[i]);
+
+            if (verbose && (loaded > 0 || toKill.Count > 0))
+                Debug.Log($"[ObjectChunkStreamer] loaded={loaded}, despawned={toKill.Count}, active={_active.Count}");
+
+            return loaded;
         }
 
         private void OnWorldRegen()
@@ -141,7 +169,8 @@ namespace Game.World.Objects.Streaming
             foreach (var key in _active)
                 objectManager.UnloadChunkVisuals(ToCoord(key));
             _active.Clear();
-            _lastCenterChunk = new Vector2Int(int.MinValue, int.MinValue);
+            _firstTick = true;
+            if (verbose) Debug.Log("[ObjectChunkStreamer] WorldRegen: cleared all active object chunks.");
         }
 
         // === helpers ===
@@ -176,12 +205,11 @@ namespace Game.World.Objects.Streaming
             return (dx * dx + dy * dy) <= r * r;
         }
 
-        // Публичные настройки из кода (если надо подтянуть из тайлового менеджера)
+        // Публичные настройки из кода (если надо подтянуть из тайлового менеджера вручную)
         public void ConfigureFromTiles(int tileRadiusCells, float cellSizeWorld)
         {
             tileRadius = tileRadiusCells;
             cellSize = cellSizeWorld;
         }
-
     }
 }
