@@ -25,11 +25,13 @@ public class BiomeSpawnProfileProvider : ScriptableObject, IObjectSpawnRuleProvi
     private void Rebuild()
     {
         _map.Clear();
+
         if (profiles != null)
         {
             foreach (var p in profiles)
                 if (p != null) _map[p.biome] = p;
         }
+
         // хотим, чтобы даже None имел профиль
         if (defaultProfile) _map[BiomeType.None] = defaultProfile;
 
@@ -38,17 +40,29 @@ public class BiomeSpawnProfileProvider : ScriptableObject, IObjectSpawnRuleProvi
 #endif
     }
 
-    public BiomeSpawnProfile GetProfile(BiomeType biome)
+    /// Реализация интерфейса: попытаться получить профиль для биома.
+    public bool TryGetProfile(BiomeType biome, out BiomeSpawnProfile profile)
     {
-        if (_map.TryGetValue(biome, out var p) && p != null)
-            return p;
+        if (_map.TryGetValue(biome, out profile) && profile != null)
+            return true;
 
-        if (defaultProfile) return defaultProfile;
+        if (defaultProfile)
+        {
+            profile = defaultProfile;
+            return true;
+        }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (_warned.Add(biome))
             Debug.LogWarning($"[BiomeSpawnProfileProvider] No profile for biome: {biome}");
 #endif
-        return null;
+        profile = null;
+        return false;
+    }
+
+    /// Удобный метод, если не нужен bool: вернёт fallback или null.
+    public BiomeSpawnProfile GetProfile(BiomeType biome)
+    {
+        return TryGetProfile(biome, out var p) ? p : null;
     }
 }
