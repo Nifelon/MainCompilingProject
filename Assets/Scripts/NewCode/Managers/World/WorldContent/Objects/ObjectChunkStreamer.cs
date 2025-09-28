@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Game.World.Objects;
+using Game.World.Signals;
 
 namespace Game.World.Objects.Streaming
 {
