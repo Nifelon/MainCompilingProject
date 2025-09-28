@@ -19,13 +19,13 @@ public class CameraFollow2D : MonoBehaviour
             var b = clampToField.GetWorldBounds();
 
             // учёт размера камеры (ортографической)
-            var cam = GetComponent<Camera>();
-            float halfH = cam != null && cam.orthographic ? cam.orthographicSize : 0f;
-            float halfW = halfH * (cam ? cam.aspect : 1f);
+            //var cam = GetComponent<Camera>();
+            //float halfH = cam != null && cam.orthographic ? cam.orthographicSize : 0f;
+            //float halfW = halfH * (cam ? cam.aspect : 1f);
 
             // чтобы камера НЕ выходила за край поля
-            desired.x = Mathf.Clamp(desired.x, b.xMin + halfW, b.xMax - halfW);
-            desired.y = Mathf.Clamp(desired.y, b.yMin + halfH, b.yMax - halfH);
+            //desired.x = Mathf.Clamp(desired.x, b.xMin + halfW, b.xMax - halfW);
+            //desired.y = Mathf.Clamp(desired.y, b.yMin + halfH, b.yMax - halfH);
         }
 
         transform.position = Vector3.Lerp(

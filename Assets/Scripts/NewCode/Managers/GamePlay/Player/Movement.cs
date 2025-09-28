@@ -40,9 +40,9 @@ public class TopDownMove2D : MonoBehaviour
         // Кламп в пределах поля (если задано)
         if (clampToField)
         {
-            var bounds = clampToField.GetWorldBounds();
-            next.x = Mathf.Clamp(next.x, bounds.xMin, bounds.xMax);
-            next.y = Mathf.Clamp(next.y, bounds.yMin, bounds.yMax);
+            //var bounds = clampToField.GetWorldBounds();
+            //next.x = Mathf.Clamp(next.x, bounds.xMin, bounds.xMax);
+            //next.y = Mathf.Clamp(next.y, bounds.yMin, bounds.yMax);
         }
 
         rb.MovePosition(next);

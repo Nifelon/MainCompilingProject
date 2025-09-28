@@ -1,43 +1,68 @@
-using System.Collections.Generic;
+п»їusing System.Collections.Generic;
 using UnityEngine;
-using Game.World.Map.Biome;
-
+using Game.World.Map.Biome;   // РІР°Р¶РЅРѕ: РЅСѓР¶РµРЅ BiomeType
 
 namespace Game.World.Creatures
 {
-    [CreateAssetMenu(menuName = "World/Creatures/Creature Spawn Rules", fileName = "creature_spawn_rules")]
+    [CreateAssetMenu(menuName = "World/Creatures/Creature Spawn Rules", fileName = "CreatureSpawnRules")]
     public class CreatureSpawnRules : ScriptableObject
     {
         [System.Serializable]
         public struct WeightedGroup
         {
             public CreatureGroupProfile group;
-            public int weight; // чем больше, тем чаще
+            public int weight;
         }
-
 
         [System.Serializable]
         public struct BiomeRule
         {
             public BiomeType biome;
-            public List<WeightedGroup> groups; // набор групп, которые встречаются в этом биоме
-            [Min(0f)] public float spawnDensity; // 0..1 — шанс на попытку группы в ячейке сетки
-            [Min(1)] public int minGroupDistance; // мин. расстояние между центрами групп (клетки)
-            [Min(0)] public int maxAlive; // общий лимит активных существ этого биома (0 = без лимита)
-            [Min(0f)] public float respawnCooldown;// сек до повторной попытки, если группа была выбита
+            public List<WeightedGroup> groups;
+            [Min(0f)] public float spawnDensity;
+            [Min(1)] public int minGroupDistance;
+            [Min(0)] public int maxAlive;
+            [Min(0f)] public float respawnCooldown;
         }
-
 
         public List<BiomeRule> biomeRules = new();
 
+        [Header("Fallback (used when no direct rule for biome)")]
+        public bool useFallbackForUnknownBiomes = true;
+        public List<WeightedGroup> fallbackGroups = new();   // СЃСЋРґР° DeerHerd/WolfPack
+        [Min(0f)] public float fallbackSpawnDensity = 0.35f;
+        [Min(1)] public int fallbackMinGroupDistance = 18;
+        [Min(0)] public int fallbackMaxAlive = 0;
+        [Min(0f)] public float fallbackRespawnCooldown = 60f;
 
         public bool TryGetRule(BiomeType biome, out BiomeRule rule)
         {
             for (int i = 0; i < biomeRules.Count; i++)
-            {
                 if (biomeRules[i].biome == biome) { rule = biomeRules[i]; return true; }
-            }
             rule = default; return false;
+        }
+
+        // в†ђ Р­РўРћР“Рћ РјРµС‚РѕРґР° Сѓ С‚РµР±СЏ РЅРµ Р±С‹Р»Рѕ
+        public bool TryGetRuleOrFallback(BiomeType biome, out BiomeRule rule)
+        {
+            if (TryGetRule(biome, out rule)) return true;
+
+            if (useFallbackForUnknownBiomes && fallbackGroups != null && fallbackGroups.Count > 0)
+            {
+                rule = new BiomeRule
+                {
+                    biome = biome,
+                    groups = fallbackGroups,
+                    spawnDensity = fallbackSpawnDensity,
+                    minGroupDistance = fallbackMinGroupDistance,
+                    maxAlive = fallbackMaxAlive,
+                    respawnCooldown = fallbackRespawnCooldown
+                };
+                return true;
+            }
+
+            rule = default;
+            return false;
         }
     }
 }

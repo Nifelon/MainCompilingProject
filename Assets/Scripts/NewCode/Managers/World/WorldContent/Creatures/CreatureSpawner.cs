@@ -1,9 +1,9 @@
 ﻿
-// CreatureSpawner.cs — планировщик групп существ (данные-только)
-// Работает без WorldContext: умеет авто-инициализироваться, если включён флаг
-// Требует: IBiomeService, (опц.) IReservationService, CreatureSpawnRules
+// CreatureSpawner.cs — планировщик групп (данные-только) с отложенной инициализацией
+// Ждёт несколько кадров перед Initialize, чтобы мир/биомы успели построиться.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Game.Core;
@@ -11,7 +11,7 @@ using Game.World.Map.Biome;
 
 namespace Game.World.Creatures
 {
-    [DefaultExecutionOrder(-220)]
+    [DefaultExecutionOrder(-50)] // позже «систем», но раньше визуальных стримеров
     public class CreatureSpawner : MonoBehaviour, IWorldSystem
     {
         [Header("Refs")]
@@ -30,12 +30,11 @@ namespace Game.World.Creatures
         [SerializeField] private int worldSeed = 12345;
 
         [Header("Sampling")]
-        [Tooltip("Шаг сетки попыток в чанке (клетки). Чем меньше — тем больше шансов появления групп.")]
-        [SerializeField, Min(4)] private int gridStepCells = 16;
+        [SerializeField, Min(4)] private int gridStepCells = 12;   // больше попыток внутри чанка
 
         [Header("Lifecycle")]
-        [Tooltip("Если мир не вызывает Initialize(WorldContext), включи это, чтобы компонент сам инициализировался.")]
-        [SerializeField] private bool autoInitialize = true;
+        [Tooltip("Сколько кадров подождать до старта (даём миру построиться).")]
+        [SerializeField, Min(0)] private int warmupFrames = 2;
 
         [Header("Debug")]
         [SerializeField] private bool verbose = false;
@@ -64,32 +63,29 @@ namespace Game.World.Creatures
         private Vector2Int _lastPlayerChunk;
         private bool _inited;
 
-        public int Order => -220;
+        public int Order => -50;
+        public bool IsReady => _inited; // ← PoolingCreatures будет проверять
 
         private void Awake()
         {
-            if (autoInitialize && !_inited)
-            {
-                // Попробуем авто-инициализироваться без WorldContext
-                Initialize(null);
-            }
+            // Стартуем отложенно корутиной
+            StartCoroutine(Co_DeferredInit());
+        }
+
+        private IEnumerator Co_DeferredInit()
+        {
+            for (int i = 0; i < warmupFrames; i++) yield return null;
+
+            Initialize(null);
         }
 
         public void Initialize(WorldContext ctx)
         {
-            _biomes = biomeServiceRef as IBiomeService;
+            _biomes = biomeServiceRef as IBiomeService ?? FindFirstObjectByType<BiomeManager>(FindObjectsInactive.Exclude);
             _reserv = reservationRef as IReservationService;
 
-            if (_biomes == null)
-            {
-                Debug.LogError("[CreatureSpawner] IBiomeService is NULL — укажи BiomeManager в инспекторе biomeServiceRef");
-                return;
-            }
-            if (rules == null)
-            {
-                Debug.LogError("[CreatureSpawner] CreatureSpawnRules is NULL — укажи ассет правил в инспекторе");
-                return;
-            }
+            if (_biomes == null) { Debug.LogError("[CreatureSpawner] IBiomeService is NULL"); return; }
+            if (rules == null) { Debug.LogError("[CreatureSpawner] CreatureSpawnRules is NULL"); return; }
 
             _activeChunks.Clear();
             _chunkGroups.Clear();
@@ -99,22 +95,19 @@ namespace Game.World.Creatures
             UpdateStreaming(_lastPlayerChunk);
             _inited = true;
 
-            if (verbose)
-                Debug.Log($"[CreatureSpawner] Init OK. chunkSize={chunkSize}, gridStep={gridStepCells}, streamRadius={streamRadiusChunks}");
+            if (verbose) Debug.Log($"[CreatureSpawner] Init OK. chunk={chunkSize}, gridStep={gridStepCells}, streamR={streamRadiusChunks}");
         }
 
         private void Update()
         {
-            if (!_inited) return;
-            if (player == null) return;
-
+            if (!_inited || !player) return;
             var pc = WorldToChunk(WorldToCell(player.position));
             if (pc == _lastPlayerChunk) return;
             _lastPlayerChunk = pc;
             UpdateStreaming(pc);
         }
 
-        // ========== Public API (for PoolingCreatures) ==========
+        // === Public API for PoolingCreatures ===
         public int GatherPlannedCreaturesWithinRadius(Vector2Int centerCell, int radiusCells, List<PlannedUnit> buffer)
         {
             buffer.Clear();
@@ -125,10 +118,9 @@ namespace Game.World.Creatures
                 for (int i = 0; i < list.Count; i++)
                 {
                     var g = list[i];
-                    var mem = g.members;
-                    for (int j = 0; j < mem.Count; j++)
+                    for (int j = 0; j < g.members.Count; j++)
                     {
-                        var u = mem[j];
+                        var u = g.members[j];
                         var d = u.cell - centerCell;
                         if (d.sqrMagnitude <= r2) buffer.Add(u);
                     }
@@ -137,20 +129,68 @@ namespace Game.World.Creatures
             return buffer.Count;
         }
 
-        // ========== Streaming ==========
+        // === Streaming ===
         private void UpdateStreaming(Vector2Int centerChunk)
         {
-            var wanted = WantedChunks(centerChunk, streamRadiusChunks);
+            // радиус в клетках — синхронизируй с PoolManager.radius
+            int tileRadius =60 /* подтянуть из PoolManager или через [SerializeField] */;
+            float cellSize = /* из Units/PoolManager */ 1f;
 
-            // LOAD
-            foreach (var ch in wanted)
-                if (_activeChunks.Add(ch)) LoadChunk(ch);
+            float loadR = (tileRadius + 8) * cellSize;   // гистерезис загрузки
+            float keepR = (tileRadius + 12) * cellSize;   // гистерезис удержания
 
-            // UNLOAD
-            _toRemove.Clear();
-            foreach (var ch in _activeChunks) if (!wanted.Contains(ch)) _toRemove.Add(ch);
-            for (int i = 0; i < _toRemove.Count; i++) UnloadChunk(_toRemove[i]);
-            for (int i = 0; i < _toRemove.Count; i++) _activeChunks.Remove(_toRemove[i]);
+            // центр круга — мир
+            Vector2 c = (Vector2)player.position;
+
+            // перебираем чанки в окрестности "по чанкам"
+            int R = Mathf.CeilToInt((tileRadius + 12f) / (float)chunkSize) + 1;
+
+            var shouldLoad = new HashSet<Vector2Int>();
+            var shouldKeep = new HashSet<Vector2Int>();
+
+            for (int dy = -R; dy <= R; dy++)
+            {
+                for (int dx = -R; dx <= R; dx++)
+                {
+                    var ch = new Vector2Int(centerChunk.x + dx, centerChunk.y + dy);
+
+                    // ВАЖНО: прямоугольник чанка в world units
+                    Rect rect = new Rect(
+                        ch.x * chunkSize * cellSize,
+                        ch.y * chunkSize * cellSize,
+                        chunkSize * cellSize,
+                        chunkSize * cellSize
+                    );
+
+                    if (CircleIntersectsRect(c, loadR, rect)) shouldLoad.Add(ch);
+                    if (CircleIntersectsRect(c, keepR, rect)) shouldKeep.Add(ch);
+                }
+            }
+
+            // SPAWN
+            foreach (var ch in shouldLoad)
+                if (_activeChunks.Add(ch))
+                    LoadChunk(ch);                // <— тут твой метод сугубо для существ
+
+            // DESPAWN
+            var toRemove = new List<Vector2Int>();
+            foreach (var ch in _activeChunks)
+                if (!shouldKeep.Contains(ch))
+                {
+                    UnloadChunk(ch);              // <— и тут тоже
+                    toRemove.Add(ch);
+                }
+            foreach (var ch in toRemove) _activeChunks.Remove(ch);
+        }
+
+        // Геометрия — оставь static в этом же классе
+        static bool CircleIntersectsRect(Vector2 c, float r, Rect rect)
+        {
+            float cx = Mathf.Clamp(c.x, rect.xMin, rect.xMax);
+            float cy = Mathf.Clamp(c.y, rect.yMin, rect.yMax);
+            float dx = cx - c.x;
+            float dy = cy - c.y;
+            return (dx * dx + dy * dy) <= r * r;
         }
 
         private void LoadChunk(Vector2Int chunk)
@@ -169,15 +209,16 @@ namespace Game.World.Creatures
                     var cell = new Vector2Int(baseCell.x + ox, baseCell.y + oy);
                     var biome = _biomes.GetBiomeAtPosition(cell);
 
-                    if (!rules.TryGetRule(biome, out var rule))
+                    // используем fallback-правила, если биом ещё None
+                    if (!rules.TryGetRuleOrFallback(biome, out var rule))
                     {
-                        if (logReasons) Debug.Log($"[CreatureSpawner] skip(no rule) biome={biome} at {cell}");
+                        if (logReasons) Debug.Log($"[CreatureSpawner] skip(no rule+no fallback) biome={biome} at {cell}");
                         continue;
                     }
 
                     if (rng.NextDouble() > Mathf.Clamp01(rule.spawnDensity))
                     {
-                        if (logReasons) Debug.Log($"[CreatureSpawner] skip(density) biome={biome} at {cell}");
+                        if (logReasons) Debug.Log($"[CreatureSpawner] skip(density) at {cell}");
                         continue;
                     }
 
@@ -189,23 +230,15 @@ namespace Game.World.Creatures
 
                     if (!IsFarFromOtherGroups(cell, rule.minGroupDistance))
                     {
-                        if (logReasons) Debug.Log($"[CreatureSpawner] skip(too close to other group) at {cell}");
+                        if (logReasons) Debug.Log($"[CreatureSpawner] skip(too close) at {cell}");
                         continue;
                     }
 
                     var grp = PickGroup(rule.groups, rng);
-                    if (!grp)
-                    {
-                        if (logReasons) Debug.Log($"[CreatureSpawner] skip(no group pick) at {cell}");
-                        continue;
-                    }
+                    if (!grp) { if (logReasons) Debug.Log($"[CreatureSpawner] skip(no group pick) at {cell}"); continue; }
 
                     var pg = BuildPlannedGroup(cell, grp, rng);
-                    if (pg.members.Count == 0)
-                    {
-                        if (logReasons) Debug.Log($"[CreatureSpawner] skip(empty group after placement) at {cell}");
-                        continue;
-                    }
+                    if (pg.members.Count == 0) { if (logReasons) Debug.Log($"[CreatureSpawner] skip(empty group) at {cell}"); continue; }
 
                     list.Add(pg);
                     placed++;
@@ -238,12 +271,7 @@ namespace Game.World.Creatures
 
         private PlannedGroup BuildPlannedGroup(Vector2Int center, CreatureGroupProfile grp, System.Random rng)
         {
-            var pg = new PlannedGroup
-            {
-                groupId = Hash3(worldSeed, center.x, center.y),
-                center = center,
-                group = grp
-            };
+            var pg = new PlannedGroup { groupId = Hash3(worldSeed, center.x, center.y), center = center, group = grp };
 
             if (grp.members != null)
             {
@@ -287,7 +315,7 @@ namespace Game.World.Creatures
             return true;
         }
 
-        // ===== Helpers =====
+        // Helpers
         private Vector2Int WorldToCell(Vector3 w) => new(Mathf.RoundToInt(w.x / cellSize), Mathf.RoundToInt(w.y / cellSize));
         private Vector2Int WorldToChunk(Vector2Int cell)
         {
@@ -312,10 +340,7 @@ namespace Game.World.Creatures
         private static ulong MakeId(Vector2Int center, CreatureProfile p, int idx)
         { unchecked { uint h = (uint)Hash3(center.x, center.y, p ? p.name.GetHashCode() : 0); return ((ulong)h << 32) | (uint)idx; } }
         private static Vector2 RandInCircle(float r, System.Random rng)
-        {
-            double ang = rng.NextDouble() * Math.PI * 2.0; double rad = rng.NextDouble() * r;
-            return new Vector2((float)(rad * Math.Cos(ang)), (float)(rad * Math.Sin(ang)));
-        }
+        { double ang = rng.NextDouble() * Math.PI * 2.0; double rad = rng.NextDouble() * r; return new Vector2((float)(rad * Math.Cos(ang)), (float)(rad * Math.Sin(ang))); }
 
         private static readonly List<Vector2Int> _toRemove = new(16);
     }

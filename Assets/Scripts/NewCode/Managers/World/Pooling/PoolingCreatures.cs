@@ -1,17 +1,19 @@
-// PoolingCreatures.cs Ч визуализаци€ существ через общий NpcPool (с дефолтным префабом)
+// PoolingCreatures.cs Ч визуализаци€ существ через общий NpcPool
+// ∆дЄм, пока CreatureSpawner.IsReady == true, и только после этого начинаем спавнить.
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace Game.World.Creatures
 {
-    [DefaultExecutionOrder(-205)]
+    [DefaultExecutionOrder(0)] // после систем и после спавнера
     public class PoolingCreatures : MonoBehaviour
     {
         [Header("Refs")]
         [SerializeField] private Transform player;
         [SerializeField] private CreatureSpawner spawner;
-        [SerializeField] private NpcPool pool;                 // общий пул
+        [SerializeField] private NpcPool pool;
         [SerializeField] private GameObject defaultCreaturePrefab;
 
         [Header("Streaming")]
@@ -19,14 +21,18 @@ namespace Game.World.Creatures
         [SerializeField] private int unloadRadius = 56;
         [SerializeField] private float cellSize = 1f;
 
+        [Header("Lifecycle")]
+        [SerializeField, Min(0)] private int warmupFrames = 2;  // даЄм миру ещЄ пару кадров на отрисовку клеток
+
         [Header("Debug")]
         [SerializeField] private bool verbose = false;
 
         private readonly Dictionary<ulong, GameObject> _active = new();
-
         private static readonly List<CreatureSpawner.PlannedUnit> s_units = new(256);
         private static readonly HashSet<ulong> s_keep = new();
         private static readonly List<ulong> s_tmp = new(64);
+
+        private bool _running;
 
         private void Awake()
         {
@@ -34,10 +40,15 @@ namespace Game.World.Creatures
             if (!spawner) spawner = FindFirstObjectByType<CreatureSpawner>(FindObjectsInactive.Exclude);
             if (unloadRadius < loadRadius) unloadRadius = loadRadius + 8;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if (!defaultCreaturePrefab)
-                Debug.LogWarning("[PoolingCreatures] DefaultCreaturePrefab is NULL Ч если в профиле нет префаба, спавна не будет.");
-#endif
+            StartCoroutine(Co_WaitAndRun());
+        }
+
+        private IEnumerator Co_WaitAndRun()
+        {
+            // ждЄм несколько кадров + готовность спавнера
+            for (int i = 0; i < warmupFrames; i++) yield return null;
+            while (spawner != null && !spawner.IsReady) yield return null;
+            _running = true;
         }
 
         private void OnDisable()
@@ -45,13 +56,14 @@ namespace Game.World.Creatures
             s_tmp.Clear(); foreach (var id in _active.Keys) s_tmp.Add(id);
             for (int i = 0; i < s_tmp.Count; i++) Despawn(s_tmp[i]);
             _active.Clear();
+            _running = false;
         }
 
         private void Update()
         {
-            if (!player || !spawner || !pool) return;
-            var center = WorldToCell(player.position);
+            if (!_running || !player || !spawner || !pool) return;
 
+            var center = WorldToCell(player.position);
             spawner.GatherPlannedCreaturesWithinRadius(center, unloadRadius, s_units);
 
             s_keep.Clear();
@@ -60,8 +72,7 @@ namespace Game.World.Creatures
             for (int i = 0; i < s_units.Count; i++)
             {
                 var u = s_units[i];
-                var d2 = (u.cell - center).sqrMagnitude;
-                if (d2 <= unload2) s_keep.Add(u.id);
+                if ((u.cell - center).sqrMagnitude <= unload2) s_keep.Add(u.id);
             }
 
             s_tmp.Clear();
@@ -71,14 +82,12 @@ namespace Game.World.Creatures
             for (int i = 0; i < s_units.Count; i++)
             {
                 var u = s_units[i];
-                var d2 = (u.cell - center).sqrMagnitude;
-                if (d2 > load2) continue;
+                if ((u.cell - center).sqrMagnitude > load2) continue;
                 if (_active.ContainsKey(u.id)) continue;
                 Spawn(u);
             }
 
-            if (verbose)
-                Debug.Log($"[PoolingCreatures] active={_active.Count}, planned={s_units.Count}");
+            if (verbose) Debug.Log($"[PoolingCreatures] active={_active.Count}, planned={s_units.Count}");
         }
 
         private void Spawn(CreatureSpawner.PlannedUnit u)
@@ -86,8 +95,7 @@ namespace Game.World.Creatures
             var prefab = (u.profile && u.profile.prefab) ? u.profile.prefab : defaultCreaturePrefab;
             if (!prefab)
             {
-                if (verbose)
-                    Debug.LogWarning($"[PoolingCreatures] No prefab/default for {u.id} (profile={(u.profile ? u.profile.name : "null")})");
+                if (verbose) Debug.LogWarning($"[PoolingCreatures] No prefab/default for {u.id} (profile={(u.profile ? u.profile.name : "null")})");
                 return;
             }
 
@@ -97,35 +105,27 @@ namespace Game.World.Creatures
             SetZByY(go.transform);
 
             var sr = go.GetComponentInChildren<SpriteRenderer>() ?? go.AddComponent<SpriteRenderer>();
-
             if (ReferenceEquals(prefab, defaultCreaturePrefab))
             {
-                // дл€ дефолтного префаба ¬—≈√ƒј выставл€ем спрайт по профилю
-                if (u.profile && u.profile.icon) sr.sprite = u.profile.icon;
+                if (u.profile && u.profile.icon) sr.sprite = u.profile.icon; // всегда перезаписываем дл€ дефолта
             }
             else
             {
-                // у профильного префаба обычно уже есть спрайт; если нет Ч подстрахуемс€ и поставим иконку
                 if (!sr.sprite && u.profile && u.profile.icon) sr.sprite = u.profile.icon;
             }
 
             _active[u.id] = go;
-
-            if (verbose)
-                Debug.Log($"[PoolingCreatures] Spawn id={u.id} at {u.cell} prefab={(prefab == defaultCreaturePrefab ? "DEFAULT" : prefab.name)}");
         }
 
         private void Despawn(ulong id)
         {
             if (!_active.TryGetValue(id, out var go) || !go) { _active.Remove(id); return; }
-
             var key = NpcPool.GetPrefabKey(go) ?? defaultCreaturePrefab;
 
-            // „истим визуал дефолтного префаба, чтобы не т€нуть спрайт между разными профил€ми
             if (ReferenceEquals(key, defaultCreaturePrefab))
             {
                 var sr = go.GetComponentInChildren<SpriteRenderer>();
-                if (sr) sr.sprite = null;
+                if (sr) sr.sprite = null; // чистим следы профил€
             }
 
             pool.Release(key, go);

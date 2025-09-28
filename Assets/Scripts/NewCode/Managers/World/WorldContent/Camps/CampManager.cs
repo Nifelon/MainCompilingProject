@@ -105,6 +105,18 @@ public class CampManager : MonoBehaviour, IWorldSystem
                 objectManager.LoadChunkVisuals(cc);
             }
     }
+    static bool CircleIntersectsRect(Vector2 c, float r, Rect rect)
+    {
+        // ближайшая точка прямоугольника к центру круга
+        float cx = Mathf.Clamp(c.x, rect.xMin, rect.xMax);
+        float cy = Mathf.Clamp(c.y, rect.yMin, rect.yMax);
+
+        float dx = cx - c.x;
+        float dy = cy - c.y;
+
+        // пересекаются, если расстояние <= радиуса
+        return (dx * dx + dy * dy) <= r * r;
+    }
 
     // ===== IWorldSystem ========================================================
     public void Initialize(WorldContext ctx)
@@ -172,25 +184,37 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
     private void UpdateStreaming(Vector2Int centerChunk)
     {
-        var wanted = WantedChunks(centerChunk, campChunkRadius);
+        // радиус в клетках — такой же, как у PoolManager.radius
+        int tileRadius = 60;
+        float cellSize = 1f; // подставь своё
+        float loadR = (tileRadius + 8) * cellSize; // гистерезис
+        float keepR = (tileRadius + 12) * cellSize;
 
-        // load новые
-        foreach (var ch in wanted)
-        {
-            if (_activeChunks.Add(ch))
-                LoadChunkCamps(ch);
-        }
+        Vector2 c = CellToWorld(WorldToCell(player.position));
+        int R = Mathf.CeilToInt((tileRadius + 12) / (float)chunkSize) + 1;
 
-        // unload ушедшие
+        var shouldLoad = new HashSet<Vector2Int>();
+        var shouldKeep = new HashSet<Vector2Int>();
+
+        for (int dy = -R; dy <= R; dy++)
+            for (int dx = -R; dx <= R; dx++)
+            {
+                var ch = new Vector2Int(centerChunk.x + dx, centerChunk.y + dy);
+                Rect rect = new Rect(
+                    ch.x * chunkSize, ch.y * chunkSize,
+                    chunkSize, chunkSize
+                ); // если cellSize!=1 — умножь
+
+                if (CircleIntersectsRect(c, loadR, rect)) shouldLoad.Add(ch);
+                if (CircleIntersectsRect(c, keepR, rect)) shouldKeep.Add(ch);
+            }
+
+        foreach (var ch in shouldLoad)
+            if (_activeChunks.Add(ch)) LoadChunkCamps(ch);
+
         var toRemove = new List<Vector2Int>();
         foreach (var ch in _activeChunks)
-        {
-            if (!wanted.Contains(ch))
-            {
-                UnloadChunkCamps(ch);
-                toRemove.Add(ch);
-            }
-        }
+            if (!shouldKeep.Contains(ch)) { UnloadChunkCamps(ch); toRemove.Add(ch); }
         foreach (var ch in toRemove) _activeChunks.Remove(ch);
     }
 
@@ -768,15 +792,6 @@ public class CampManager : MonoBehaviour, IWorldSystem
     }
 
     private Vector2Int ChunkToWorldCell(Vector2Int chunk) => new(chunk.x * chunkSize + chunkSize / 2, chunk.y * chunkSize + chunkSize / 2);
-
-    private HashSet<Vector2Int> WantedChunks(Vector2Int center, int r)
-    {
-        var set = new HashSet<Vector2Int>();
-        for (int dx = -r; dx <= r; dx++)
-            for (int dy = -r; dy <= r; dy++)
-                set.Add(new Vector2Int(center.x + dx, center.y + dy));
-        return set;
-    }
 
     private static int NextRange(Random rng, int minInclusive, int maxInclusive)
     {

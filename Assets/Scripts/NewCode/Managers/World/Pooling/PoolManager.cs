@@ -175,44 +175,55 @@ public class PoolManager : MonoBehaviour
     {
         if (!objectManager) return;
 
-        var bm = FindObjectOfType<BiomeManager>();
-        if (bm == null || !bm.IsBiomesReady) return;
+        // центр круга в world units
+        Vector2 c = CellToWorld(centerCell);
+        float loadR = (_chunkLoadRadius * objectsChunkSize) * cellSize;   // клетки -> мир
+        float keepR = (_chunkUnloadRadius * objectsChunkSize) * cellSize;
 
-        // текущие координаты чанка по центру окна
-        int cx = centerCell.x >= 0 ? centerCell.x / objectsChunkSize
-                                   : (centerCell.x - (objectsChunkSize - 1)) / objectsChunkSize;
-        int cy = centerCell.y >= 0 ? centerCell.y / objectsChunkSize
-                                   : (centerCell.y - (objectsChunkSize - 1)) / objectsChunkSize;
+        // Просматриваем только ограниченную окрестность по чанкам:
+        int R = _chunkUnloadRadius + 1;
+        var shouldLoad = new HashSet<ulong>();
+        var shouldKeep = new HashSet<ulong>();
 
-        // набор чанков, которые должны быть активны
-        var should = new HashSet<ulong>();
-        for (int dy = -objectsChunkRadius; dy <= objectsChunkRadius; dy++)
-            for (int dx = -objectsChunkRadius; dx <= objectsChunkRadius; dx++)
+        for (int dy = -R; dy <= R; dy++)
+            for (int dx = -R; dx <= R; dx++)
             {
-                int x = cx + dx, y = cy + dy;
-                ulong key = ChunkKey(x, y);
-                should.Add(key);
+                int cx = Mathf.FloorToInt(centerCell.x / (float)objectsChunkSize) + dx;
+                int cy = Mathf.FloorToInt(centerCell.y / (float)objectsChunkSize) + dy;
+
+                Rect rect = new Rect(
+                    cx * objectsChunkSize * cellSize,
+                    cy * objectsChunkSize * cellSize,
+                    objectsChunkSize * cellSize,
+                    objectsChunkSize * cellSize
+                );
+
+                ulong key = ChunkKey(cx, cy);
+                if (CircleIntersectsRect(c, loadR, rect)) shouldLoad.Add(key);
+                if (CircleIntersectsRect(c, keepR, rect)) shouldKeep.Add(key);
             }
 
-        // выгружаем лишние
+        // ДЕСПАВН: всё, что не попадает в keep
         foreach (var key in _activeObjectChunks)
-        {
-            if (should.Contains(key)) continue;
-            var cc = new ObjectManager.ChunkCoord((int)(key >> 32), (int)(key & 0xffffffff));
-            objectManager.UnloadChunkVisuals(cc);
-        }
+            if (!shouldKeep.Contains(key))
+                objectManager.UnloadChunkVisuals(new ObjectManager.ChunkCoord((int)(key >> 32), (int)(key & 0xffffffff)));
 
-        // загружаем недостающие
-        foreach (var key in should)
-        {
-            if (_activeObjectChunks.Contains(key)) continue;
-            var cc = new ObjectManager.ChunkCoord((int)(key >> 32), (int)(key & 0xffffffff));
-            objectManager.LoadChunkVisuals(cc);
-        }
+        // СПАВН: всё, что попадает в load и ещё не активно
+        foreach (var key in shouldLoad)
+            if (!_activeObjectChunks.Contains(key))
+                objectManager.LoadChunkVisuals(new ObjectManager.ChunkCoord((int)(key >> 32), (int)(key & 0xffffffff)));
 
-        // фиксация активного набора
         _activeObjectChunks.Clear();
-        foreach (var k in should) _activeObjectChunks.Add(k);
+        foreach (var k in shouldKeep) _activeObjectChunks.Add(k);
+    }
+
+    static bool CircleIntersectsRect(Vector2 c, float r, Rect rect)
+    {
+        var closest = new Vector2(
+            Mathf.Clamp(c.x, rect.xMin, rect.xMax),
+            Mathf.Clamp(c.y, rect.yMin, rect.yMax)
+        );
+        return (closest - c).sqrMagnitude <= r * r;
     }
 
     void UnloadAllObjectChunks()

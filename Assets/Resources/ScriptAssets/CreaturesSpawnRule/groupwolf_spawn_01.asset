@@ -83,3 +83,9 @@ MonoBehaviour:
     minGroupDistance: 20
     maxAlive: 0
     respawnCooldown: 0
+  useFallbackForUnknownBiomes: 1
+  fallbackGroups: []
+  fallbackSpawnDensity: 0.35
+  fallbackMinGroupDistance: 18
+  fallbackMaxAlive: 0
+  fallbackRespawnCooldown: 60
