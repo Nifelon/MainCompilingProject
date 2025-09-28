@@ -4,6 +4,7 @@ namespace Game.World.Objects
 {
     public enum ObjectType
     {
+        None,
         Palm,
         Oak,
         Spruce,
