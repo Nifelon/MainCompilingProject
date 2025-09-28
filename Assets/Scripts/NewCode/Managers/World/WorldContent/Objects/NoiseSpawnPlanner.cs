@@ -42,40 +42,43 @@ namespace Game.World.Objects.Spawning
         {
             var result = new List<ObjectInstanceData>(128);
             var occupied = new HashSet<Vector2Int>();
-            if (_biomes == null || _rules == null || _byType.Count == 0) return result;
 
-            foreach (BiomeType biome in Enum.GetValues(typeof(BiomeType)))
+            if (_biomes == null || _rules == null || _byType.Count == 0)
+                return result;
+
+            // Биом конкретно этого чанка — по центру
+            var centerCell = new Vector2Int(originCell.x + chunkSize / 2, originCell.y + chunkSize / 2);
+            var biome = _biomes.GetBiomeAtPosition(centerCell);
+
+            var profile = _rules.GetProfile(biome);
+            if (profile == null || profile.rules == null || profile.rules.Count == 0)
+                return result; // нечего спавнить
+
+            float densMul = Mathf.Max(0.1f, profile.densityMultiplier);
+
+            foreach (var rule in profile.rules)
             {
-                var profile = _rules.GetProfile(biome);
-                if (profile == null || profile.rules == null || profile.rules.Count == 0) continue;
+                if (rule == null || rule.objectType == ObjectType.None) continue;
 
-                float densMul = Mathf.Max(0.01f, profile.densityMultiplier);
+                int targetBase = Mathf.RoundToInt(rule.baseDensityPerChunk * densMul);
+                int target = Mathf.Clamp(targetBase, 0, rule.maxPerChunk);
+                if (target <= 0) continue;
 
-                foreach (var rule in profile.rules)
+                var rng = new System.Random(Hash(worldSeed, originCell.x, originCell.y, (int)rule.objectType));
+
+                switch (rule.mode)
                 {
-                    if (rule == null || rule.objectType == ObjectType.None) continue;
-
-                    // твоё поле: targetPerChunk
-                    int target = Mathf.RoundToInt(rule.targetPerChunk * densMul);
-                    if (target <= 0) continue;
-
-                    var rng = new System.Random(Hash(worldSeed, originCell.x, originCell.y, (int)rule.objectType));
-
-                    switch (rule.mode)
-                    {
-                        case SpawnMode.BlueNoise:
-                            PlaceBlueNoise(biome, rule, originCell, chunkSize, target, rng, occupied, result, chunkKey);
-                            break;
-                        case SpawnMode.Clustered:
-                            PlaceClustered(biome, rule, originCell, chunkSize, target, rng, occupied, result, chunkKey);
-                            break;
-                        default: // Uniform
-                            PlaceUniform(biome, rule, originCell, chunkSize, target, rng, occupied, result, chunkKey);
-                            break;
-                    }
+                    case SpawnMode.BlueNoise:
+                        PlaceBlueNoise(biome, rule, originCell, chunkSize, target, rng, occupied, result, chunkKey);
+                        break;
+                    case SpawnMode.Clustered:
+                        PlaceClustered(biome, rule, originCell, chunkSize, target, rng, occupied, result, chunkKey);
+                        break;
+                    default:
+                        PlaceUniform(biome, rule, originCell, chunkSize, target, rng, occupied, result, chunkKey);
+                        break;
                 }
             }
-
             return result;
         }
 

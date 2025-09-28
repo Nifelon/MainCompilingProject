@@ -1,23 +1,25 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Game.World.Map.Biome;
+using Game.World.Objects.Spawning;
 
 [CreateAssetMenu(menuName = "World/Biome Spawn Profile Provider")]
-public class BiomeSpawnProfileProvider : ScriptableObject
+public class BiomeSpawnProfileProvider : ScriptableObject, IObjectSpawnRuleProvider
 {
     [SerializeField] private List<BiomeSpawnProfile> profiles = new();
+
     [Header("Fallback")]
-    [Tooltip("Профиль по умолчанию, если для биома нет явного профиля. Рекомендуется указать.")]
+    [Tooltip("Профиль по умолчанию для биомов без явного профиля (в т.ч. Biome.None).")]
     [SerializeField] private BiomeSpawnProfile defaultProfile;
 
     private readonly Dictionary<BiomeType, BiomeSpawnProfile> _map = new();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-    private HashSet<BiomeType> _warned = new();
+    private readonly HashSet<BiomeType> _warned = new();
 #endif
 
-    private void OnEnable() { Rebuild(); }
+    void OnEnable() => Rebuild();
 #if UNITY_EDITOR
-    private void OnValidate() { Rebuild(); }
+    void OnValidate() => Rebuild();
 #endif
 
     private void Rebuild()
@@ -30,8 +32,9 @@ public class BiomeSpawnProfileProvider : ScriptableObject
         }
         // хотим, чтобы даже None имел профиль
         if (defaultProfile) _map[BiomeType.None] = defaultProfile;
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        _warned?.Clear();
+        _warned.Clear();
 #endif
     }
 
@@ -43,11 +46,8 @@ public class BiomeSpawnProfileProvider : ScriptableObject
         if (defaultProfile) return defaultProfile;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (_warned != null && !_warned.Contains(biome))
-        {
-            _warned.Add(biome);
+        if (_warned.Add(biome))
             Debug.LogWarning($"[BiomeSpawnProfileProvider] No profile for biome: {biome}");
-        }
 #endif
         return null;
     }
