@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using Game.World.Map.Biome;
 using Game.World.Objects;
-using static ObjectManager;
+// static ObjectManager;
 
 namespace Game.World.Objects.Spawning
 {
     /// Планировщик по биом-профилям: Uniform / Clustered / BlueNoise.
     /// SRP: только считает данные, ничего не спаунит и не трогает пул/вью.
-    public sealed class NoiseSpawnPlanner : MonoBehaviour
+    public sealed class NoiseSpawnPlanner : MonoBehaviour, IObjectSpawnPlanner
     {
         [Header("Services")]
         [SerializeField] private MonoBehaviour biomeServiceBehaviour;     // IBiomeService
