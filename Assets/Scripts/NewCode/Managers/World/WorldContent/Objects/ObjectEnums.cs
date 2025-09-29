@@ -2,20 +2,35 @@ using UnityEngine;
 
 namespace Game.World.Objects
 {
+    public enum ObjectCategory
+    {
+        Natural = 0, // 0xx
+        Settlement = 1, // 1xx
+        Structure = 2, // 2xx
+        Rare = 3, // 3xx
+    }
     public enum ObjectType
     {
-        None,
-        Palm,
-        Oak,
-        Spruce,
-        Rock,
-        Cactus,
-        Bush,        // обычный (без €год)
-        BerryBush,    // куст с €годами (интерактивный)
-        TentSmall,
-        TentLarge,
-        Campfire,
-        WorkBench,
+        // 0 - служебное
+
+        None = 0,
+
+        //0xx природные объекты
+
+        Palm = 1,
+        Oak =2,
+        Spruce=3,
+        Rock=4,
+        Cactus=5,
+        Bush=6,        // обычный (без €год)
+        BerryBush=7,    // куст с €годами (интерактивный)
+
+        //1хх объекты поселений
+
+        TentSmall=101,
+        TentLarge=102,
+        Campfire=103,
+        WorkBench=104,
     }
 
     // ”словный тэг поведени€ (на будущее, удобно как Flags)

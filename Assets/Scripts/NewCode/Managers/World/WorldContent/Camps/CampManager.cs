@@ -103,8 +103,6 @@ public class CampManager : MonoBehaviour, IWorldSystem
             for (int cy = minCy; cy <= maxCy; cy++)
             {
                 var cc = new ObjectManager.ChunkCoord(cx, cy);
-                objectManager.UnloadChunkVisuals(cc);
-                objectManager.LoadChunkVisuals(cc);
             }
     }
     static bool CircleIntersectsRect(Vector2 c, float r, Rect rect)

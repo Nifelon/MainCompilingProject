@@ -5,8 +5,10 @@ using Game.World.Signals;
 
 namespace Game.World.Objects.Streaming
 {
+    /// <summary>
     /// Стримит чанки объектов вокруг игрока кругом видимости (как тайлы).
-    /// Ничего не генерирует и не трогает пул напрямую — только вызывает ObjectManager.
+    /// Никакой генерации и прямой работы с пулом — только вызовы ObjectManager.
+    /// </summary>
     [DefaultExecutionOrder(-185)]
     public sealed class ObjectChunkStreamer : MonoBehaviour
     {
@@ -60,6 +62,17 @@ namespace Game.World.Objects.Streaming
             WorldSignals.OnWorldRegen += OnWorldRegen;
         }
 
+        void Start()
+        {
+            // Подхватим единицы до первого Refresh, чтобы стартовый чанк подгрузился без движения
+            if (tiles != null)
+            {
+                tileRadius = tiles.RadiusCells;
+                cellSize = tiles.CellSizeWorld;
+            }
+            _firstTick = true; // гарантированно сделаем первый Refresh
+        }
+
         void OnDestroy()
         {
             WorldSignals.OnWorldRegen -= OnWorldRegen;
@@ -69,10 +82,10 @@ namespace Game.World.Objects.Streaming
         {
             if (!player || !objectManager) return;
 
-            // 1) синхронизируем единицы и радиус с тайлами (если ссылка задана)
+            // 1) живо синхронизируемся с тайловым менеджером (если он есть)
             if (tiles != null)
             {
-                tileRadius = tiles.RadiusCells;   // геттеры из PoolManager
+                tileRadius = tiles.RadiusCells;
                 cellSize = tiles.CellSizeWorld;
             }
 
@@ -94,12 +107,12 @@ namespace Game.World.Objects.Streaming
 
                 int loaded = Refresh(centerChunk, c);
 
-                // DIAG: если ничего не загрузили и совсем пусто — форсим центральный чанк
+                // Если ничего не загрузили и всё пусто — форсим центральный чанк
                 if (loaded == 0 && _active.Count == 0)
                 {
                     var key = ChunkKey(centerChunk);
-                    objectManager.LoadChunkVisuals(ToCoord(key));
                     _active.Add(key);
+                    objectManager.LoadChunkVisuals(centerChunk.x, centerChunk.y);
                     if (verbose)
                         Debug.LogWarning($"[ObjectChunkStreamer] Forced-load center chunk {centerChunk} (tileRadius={tileRadius}, cellSize={cellSize}, chunkSize={objectsChunkSize}).");
                 }
@@ -113,11 +126,13 @@ namespace Game.World.Objects.Streaming
         // === core ===
         private int Refresh(Vector2Int centerChunk, Vector2 centerWorld)
         {
-            float loadR = (tileRadius + loadPaddingCells) * cellSize;
-            float keepR = (tileRadius + keepPaddingCells) * cellSize;
+            float loadR = (tileRadius + loadPaddingCells) * cellSize; // мир
+            float keepR = (tileRadius + keepPaddingCells) * cellSize; // мир
 
-            // сколько чанков осматривать вокруг (по зоне удержания)
-            int R = Mathf.CeilToInt((tileRadius + keepPaddingCells) / (float)objectsChunkSize) + 1;
+            // Сколько чанков проверять вокруг по УДЕРЖАНИЮ (в мирах + полу-диагональ чанка)
+            float chunkWorldSize = objectsChunkSize * cellSize;
+            float halfDiag = 0.5f * chunkWorldSize * 1.41421356f; // sqrt(2)
+            int R = Mathf.CeilToInt((keepR + halfDiag) / chunkWorldSize);
 
             var shouldLoad = new HashSet<ulong>();
             var shouldKeep = new HashSet<ulong>();
@@ -126,7 +141,6 @@ namespace Game.World.Objects.Streaming
                 for (int dx = -R; dx <= R; dx++)
                 {
                     var ch = new Vector2Int(centerChunk.x + dx, centerChunk.y + dy);
-
                     Rect rect = ChunkRectWorld(ch);     // world units
                     ulong key = ChunkKey(ch);
 
@@ -140,8 +154,9 @@ namespace Game.World.Objects.Streaming
             foreach (var key in shouldLoad)
             {
                 if (_active.Contains(key)) continue;
-                objectManager.LoadChunkVisuals(ToCoord(key));
                 _active.Add(key);
+                var cc = ToCoord(key);
+                objectManager.LoadChunkVisuals(cc.x, cc.y);
                 loaded++;
             }
 
@@ -149,13 +164,15 @@ namespace Game.World.Objects.Streaming
             var toKill = new List<ulong>();
             foreach (var key in _active)
             {
-                if (!shouldKeep.Contains(key))
-                {
-                    objectManager.UnloadChunkVisuals(ToCoord(key));
-                    toKill.Add(key);
-                }
+                if (!shouldKeep.Contains(key)) toKill.Add(key);
             }
-            for (int i = 0; i < toKill.Count; i++) _active.Remove(toKill[i]);
+            for (int i = 0; i < toKill.Count; i++)
+            {
+                var key = toKill[i];
+                var cc = ToCoord(key);
+                objectManager.UnloadChunkVisuals(cc.x, cc.y);
+                _active.Remove(key);
+            }
 
             if (verbose && (loaded > 0 || toKill.Count > 0))
                 Debug.Log($"[ObjectChunkStreamer] loaded={loaded}, despawned={toKill.Count}, active={_active.Count}");
@@ -165,9 +182,6 @@ namespace Game.World.Objects.Streaming
 
         private void OnWorldRegen()
         {
-            // Полный сброс
-            foreach (var key in _active)
-                objectManager.UnloadChunkVisuals(ToCoord(key));
             _active.Clear();
             _firstTick = true;
             if (verbose) Debug.Log("[ObjectChunkStreamer] WorldRegen: cleared all active object chunks.");
@@ -211,5 +225,19 @@ namespace Game.World.Objects.Streaming
             tileRadius = tileRadiusCells;
             cellSize = cellSizeWorld;
         }
+
+#if UNITY_EDITOR
+        void OnDrawGizmosSelected()
+        {
+            if (!objectManager) return;
+            Gizmos.color = new Color(0f, 1f, 0f, 0.12f);
+            foreach (var key in _active)
+            {
+                var cc = ToCoord(key);
+                var r = objectManager.GetChunkWorldRect(new ObjectManager.ChunkCoord(cc.x, cc.y));
+                Gizmos.DrawCube(r.center, r.size);
+            }
+        }
+#endif
     }
 }

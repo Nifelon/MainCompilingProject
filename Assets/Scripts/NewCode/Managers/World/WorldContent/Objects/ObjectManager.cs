@@ -1,8 +1,8 @@
 ﻿// Assets/Game/World/Objects/ObjectManager.cs
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Game.World.Objects.Spawning;        // IObjectSpawnPlanner
-//using Game.World.Content.Services;       // IReservationService
 
 namespace Game.World.Objects
 {
@@ -12,14 +12,13 @@ namespace Game.World.Objects
     /// - спавнит/деспавнит визуал через IObjectView (обёртка над пулом);
     /// - ведёт индекс активных объектов по чанкам для корректного despawn;
     /// - отфильтровывает зарезервированные клетки при спавне.
-    /// ВНИМАНИЕ: стриминг (когда грузить/выгружать чанк) — СНАРУЖИ (ObjectChunkStreamer).
-    /// Правила/планирование — СНАРУЖИ (BiomeSpawnProfileProvider + NoiseSpawnPlanner).
+    /// Стриминг снаружи (ObjectChunkStreamer). Планирование снаружи (IObjectSpawnPlanner).
     /// </summary>
     public sealed class ObjectManager : MonoBehaviour
     {
         // ------------ Публичные типы/сигнатуры (совместимость со старым кодом) ------------
 
-        /// <summary> Координаты чанка (в индексах чанков, не в клетках). </summary>
+        /// <summary>Координаты чанка (в индексах чанков, не в клетках).</summary>
         [System.Serializable]
         public struct ChunkCoord
         {
@@ -65,6 +64,9 @@ namespace Game.World.Objects
         [SerializeField] private MonoBehaviour reservationBehaviour; // IReservationService
         private IReservationService _reservation;
 
+        [Header("Reservation")]
+        [SerializeField] private ReservationMask reservationMaskForThisManager = ReservationMask.Nature;
+
         // ----------------- Runtime state -----------------
 
         /// <summary>Кэш планов инстансов по чанку.</summary>
@@ -109,50 +111,58 @@ namespace Game.World.Objects
         /// Загрузить визуальную часть чанка: пройтись по плану и заспавнить инстансы через пул,
         /// отфильтровав зарезервированные клетки.
         /// </summary>
-        public void LoadChunkVisuals(ChunkCoord cc)
+        public void LoadChunkVisuals(int cx, int cy)
         {
+            var cc = new ChunkCoord(cx, cy);
             var key = ChunkKey(cc);
+
+            // 1) план (данные без GO)
             var plan = GetOrGenerateChunk(cc);
-            if (plan == null || plan.Count == 0) return;
 
+            // 2) фильтр резерваций (по центру и footprint)
+            if (_reservation != null && plan.Count > 0 && reservationMaskForThisManager != ReservationMask.None)
+            {
+                plan = plan.Where(p => !IsReserved(p)).ToList();
+            }
+
+            // 3) спавн через вью-адаптер + индекс
             int spawned = 0;
-
             for (int i = 0; i < plan.Count; i++)
             {
-                var inst = plan[i];
+                var data = plan[i];
 
-                // Фильтр резерваций (лагеря, запретные зоны)
-                if (_reservation != null && _reservation.IsReserved(inst.cell, ReservationMask.All))
-                    continue;
+                // защита от дублирования по id (если чанк перелоднили)
+                if (_index.TryGet(key, data.id, out _)) continue;
 
-                var handle = _view.Spawn(inst);
-                if (handle.IsValid)
-                {
-                    _index.Add(key, handle);
-                    spawned++;
-                }
+                var h = _view.Spawn(data);  // внутри адаптер выставит позицию/спрайт/слои/коллайдер
+                _index.Add(key, h);         // важно: h.Id == data.id
+                spawned++;
             }
 
             if (verbose)
-                Debug.Log($"[ObjectManager] LoadChunkVisuals {cc} → spawned={spawned}");
+                Debug.Log($"[Objects] chunk=({cx},{cy}) plan={plan.Count} spawned={spawned}");
         }
 
         /// <summary>
         /// Выгрузить визуальную часть чанка: взять все активные объекты из индекса и вернуть в пул.
         /// </summary>
-        public void UnloadChunkVisuals(ChunkCoord cc)
+        public void UnloadChunkVisuals(int cx, int cy)
         {
+            var cc = new ChunkCoord(cx, cy);
             var key = ChunkKey(cc);
-            int removed = 0;
 
-            foreach (var h in _index.RemoveAllInChunk(key))
+            var dict = _index.GetChunk(key);
+            if (dict == null || dict.Count == 0) return;
+
+            _tmpHandles.Clear();
+            _tmpHandles.AddRange(dict.Values);
+
+            for (int i = 0; i < _tmpHandles.Count; i++)
             {
+                var h = _tmpHandles[i];
                 _view.Despawn(h);
-                removed++;
+                _index.Remove(key, h.Id, out _);
             }
-
-            if (verbose)
-                Debug.Log($"[ObjectManager] UnloadChunkVisuals {cc} → despawned={removed}");
         }
 
         /// <summary>
@@ -164,7 +174,6 @@ namespace Game.World.Objects
             float r2 = worldRadius * worldRadius;
             int removed = 0;
 
-            // Проходим по всем чанкам, для которых у нас есть планы (используем как список ключей).
             foreach (var kv in _chunkPlans)
             {
                 var key = kv.Key;
@@ -203,8 +212,6 @@ namespace Game.World.Objects
         /// </summary>
         public void DespawnAll()
         {
-            // Выгрузка всех активных
-            // (Если нужно быстрее — можно добавить перечислитель всех хэндлов в ObjectRuntimeIndex)
             foreach (var kv in _chunkPlans)
             {
                 var key = kv.Key;
@@ -250,24 +257,47 @@ namespace Game.World.Objects
 
         // ----------------- Helpers -----------------
 
-        /// <summary> Левый-нижний угол чанка в клетках. </summary>
+        /// <summary>Левый-нижний угол чанка в клетках.</summary>
         public Vector2Int ChunkOrigin(ChunkCoord cc) => new(cc.x * chunkSize, cc.y * chunkSize);
 
-        /// <summary> Прямоугольник чанка в world units (удобно для отладки/клика). </summary>
+        /// <summary>Прямоугольник чанка в world units (удобно для отладки/клика).</summary>
         public Rect GetChunkWorldRect(ChunkCoord cc)
         {
             var o = ChunkOrigin(cc);
             return new Rect(o.x * cellSize, o.y * cellSize, chunkSize * cellSize, chunkSize * cellSize);
         }
 
-        /// <summary>
-        /// Ключ чанка: X в старших 32 битах, Y в младших (совместим с ObjectChunkStreamer).
-        /// </summary>
+        /// <summary>Ключ чанка: X в старших 32 битах, Y в младших (совместим с ObjectChunkStreamer).</summary>
         public static ulong ChunkKey(ChunkCoord cc)
             => ((ulong)(uint)cc.x << 32) | (uint)cc.y;
 
-        /// <summary> Обратно: ключ в координаты (если потребуется). </summary>
+        /// <summary>Обратно: ключ в координаты (если потребуется).</summary>
         public static ChunkCoord KeyToChunk(ulong key)
             => new((int)(key >> 32), (int)(key & 0xffffffff));
+
+        /// <summary>Проверка резервации: центр клетки и footprint вокруг.</summary>
+        private bool IsReserved(ObjectInstanceData data)
+        {
+            if (_reservation == null || reservationMaskForThisManager == ReservationMask.None)
+                return false;
+
+            // центр клетки
+            if (_reservation.IsReserved(data.cell, reservationMaskForThisManager))
+                return true;
+
+            // footprint как полуоси (hx, hy) в клетках
+            int hx = Mathf.Max(0, data.footprint.x);
+            int hy = Mathf.Max(0, data.footprint.y);
+            if (hx == 0 && hy == 0) return false;
+
+            for (int dy = -hy; dy <= hy; dy++)
+                for (int dx = -hx; dx <= hx; dx++)
+                {
+                    var c = new Vector2Int(data.cell.x + dx, data.cell.y + dy);
+                    if (_reservation.IsReserved(c, reservationMaskForThisManager))
+                        return true;
+                }
+            return false;
+        }
     }
 }
