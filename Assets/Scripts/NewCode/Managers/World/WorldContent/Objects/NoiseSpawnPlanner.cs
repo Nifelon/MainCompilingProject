@@ -30,7 +30,7 @@ namespace Game.World.Objects.Spawning
             _biomes = biomeServiceBehaviour as IBiomeService
                    ?? FindFirstObjectByType<BiomeManager>(FindObjectsInactive.Exclude);
             _rules = ruleProviderBehaviour as IObjectSpawnRuleProvider
-                   ?? FindFirstObjectByType<BiomeSpawnProfileProvider>(FindObjectsInactive.Exclude);
+                    ?? FindFirstObjectByType<BiomeSpawnProfileProviderBehaviour>(FindObjectsInactive.Exclude) as IObjectSpawnRuleProvider;
             _reservation = reservationBehaviour as IReservationService
                    ?? FindFirstObjectByType<ReservationService>(FindObjectsInactive.Exclude);
 

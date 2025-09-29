@@ -241,16 +241,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 72795821}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6a839ec0cfc4bba4ea0eed02be10940a, type: 3}
+  m_Script: {fileID: 11500000, guid: 5f1885455cceaf947af7fa7ae4f92d8d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  profiles:
-  - {fileID: 11400000, guid: 76eb09318477a0f4b87ae86757ecf061, type: 2}
-  - {fileID: 11400000, guid: 3788d1e216e977242841bb1ed637f839, type: 2}
-  - {fileID: 11400000, guid: 540a7254d60edfb43a4d53240b3894c5, type: 2}
-  - {fileID: 11400000, guid: 35626cdfc7f55024f95ce09838d28a0b, type: 2}
-  - {fileID: 11400000, guid: dd34959c0f0ecc64d976ba8ed0761f5f, type: 2}
-  - {fileID: 11400000, guid: f81c98899dc565f42a9350e6c95a1b44, type: 2}
+  asset: {fileID: 11400000, guid: f2dab3dd7b8d9584793ddb39bd9580ec, type: 2}
 --- !u!1 &307055006
 GameObject:
   m_ObjectHideFlags: 0

@@ -116,11 +116,12 @@ namespace Game.World.Objects
 
             if (preferCapsuleForTallSprites && aspect >= tallAspectThreshold)
             {
-                var cc = go.GetComponent<CapsuleCollider2D>() ?? go.AddComponent<CapsuleCollider2D>();
-                cc.direction = CapsuleDirection2D.Vertical;
-                cc.size = new Vector2(b.size.x * scale.x, b.size.y * scale.y);
-                cc.offset = new Vector2(b.center.x * scale.x, b.center.y * scale.y);
-                // если был Box — можно отключить/удалить
+                if (TryGetComponent(out CapsuleCollider2D cap))
+                {
+                    cap.direction = CapsuleDirection2D.Vertical;
+                    cap.size = new Vector2(b.size.x * scale.x, b.size.y * scale.y);
+                    cap.offset = new Vector2(b.center.x * scale.x, b.center.y * scale.y);
+                }// если был Box — можно отключить/удалить
                 var bc = go.GetComponent<BoxCollider2D>();
                 if (bc) bc.enabled = false;
             }
