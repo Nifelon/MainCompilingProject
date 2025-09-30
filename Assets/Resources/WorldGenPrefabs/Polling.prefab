@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &6005915694996098986
+--- !u!1 &4031599824605687372
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,13 +8,13 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 6748356458767371033}
-  - component: {fileID: 9164444832100197524}
-  - component: {fileID: 1648383469321125838}
-  - component: {fileID: 3212864906534074654}
-  - component: {fileID: 4530410409073747161}
-  - component: {fileID: 1191127560007710707}
-  - component: {fileID: 4392836909690823374}
+  - component: {fileID: 3008676481637790618}
+  - component: {fileID: 7763858141267481773}
+  - component: {fileID: 7679157549956021424}
+  - component: {fileID: 1035437621562855645}
+  - component: {fileID: 65605990693023324}
+  - component: {fileID: 8118086539423865026}
+  - component: {fileID: 9096823970955181921}
   m_Layer: 0
   m_Name: Polling
   m_TagString: Untagged
@@ -22,13 +22,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &6748356458767371033
+--- !u!4 &3008676481637790618
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6005915694996098986}
+  m_GameObject: {fileID: 4031599824605687372}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 617.7885, y: 408.70792, z: -4.7102823}
@@ -37,32 +37,29 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &9164444832100197524
+--- !u!114 &7763858141267481773
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6005915694996098986}
+  m_GameObject: {fileID: 4031599824605687372}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a0f1237abd589c94f940c49574f38e30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   player: {fileID: 0}
-  mainTilePool: {fileID: 1648383469321125838}
-  objectManager: {fileID: 0}
+  mainTilePool: {fileID: 7679157549956021424}
   radius: 55
   cellSize: 1
-  objectsChunkSize: 64
-  objectsChunkRadius: 2
---- !u!114 &1648383469321125838
+--- !u!114 &7679157549956021424
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6005915694996098986}
+  m_GameObject: {fileID: 4031599824605687372}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8443874a8bc08134a95cccdcb343f7a8, type: 3}
@@ -72,13 +69,13 @@ MonoBehaviour:
   tilesRoot: {fileID: 0}
   poolCount: 3000
   groundPaintRef: {fileID: 0}
---- !u!114 &3212864906534074654
+--- !u!114 &1035437621562855645
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6005915694996098986}
+  m_GameObject: {fileID: 4031599824605687372}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 174f0e43ca67c244d816e9a5f51e2442, type: 3}
@@ -86,27 +83,30 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   defaultSpritePrefab: {fileID: 4810241971616142191, guid: 1cd78f1e20ddce643b91336ed0afc827, type: 3}
   overrides: []
-  objectsRoot: {fileID: 0}
---- !u!114 &4530410409073747161
+  sortingLayer: Objects
+  orderOffset: 0
+  ySort: 1
+  ySortMul: 10
+--- !u!114 &65605990693023324
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6005915694996098986}
+  m_GameObject: {fileID: 4031599824605687372}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a5d6e6fc629816149a4155645ab22b95, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   warmup: []
---- !u!114 &1191127560007710707
+--- !u!114 &8118086539423865026
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6005915694996098986}
+  m_GameObject: {fileID: 4031599824605687372}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 27dc3dde5484d514c9cbef523e5cd0af, type: 3}
@@ -115,19 +115,19 @@ MonoBehaviour:
   player: {fileID: 0}
   campManager: {fileID: 0}
   npcService: {fileID: 0}
-  npcPool: {fileID: 4530410409073747161}
+  npcPool: {fileID: 65605990693023324}
   defaultNpcPrefab: {fileID: 4810241971616142191, guid: b9d7f6e4acd947b49a10ebcb9f3b561f, type: 3}
   loadRadius: 48
   unloadRadius: 56
   cellSize: 1
   verboseLogs: 0
---- !u!114 &4392836909690823374
+--- !u!114 &9096823970955181921
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6005915694996098986}
+  m_GameObject: {fileID: 4031599824605687372}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 628034576e403d74389c3a91a62965b4, type: 3}
@@ -135,9 +135,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   player: {fileID: 0}
   spawner: {fileID: 0}
-  pool: {fileID: 4530410409073747161}
+  pool: {fileID: 65605990693023324}
   defaultCreaturePrefab: {fileID: 4810241971616142191, guid: b9d7f6e4acd947b49a10ebcb9f3b561f, type: 3}
   loadRadius: 48
   unloadRadius: 56
   cellSize: 1
+  warmupFrames: 2
   verbose: 0
