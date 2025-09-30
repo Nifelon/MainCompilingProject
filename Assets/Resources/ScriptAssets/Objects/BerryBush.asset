@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: acb5ae91b2115614587b9f43b85804b9, type: 3}
   m_Name: BerryBush
   m_EditorClassIdentifier: 
-  type: 6
+  type: 7
   displayName: "\u042F\u0433\u043E\u0434\u043D\u044B\u0439 \u043A\u0443\u0441\u0442"
   footprint: {x: 1, y: 1}
   pivotOffsetWorld: {x: 0, y: 0}

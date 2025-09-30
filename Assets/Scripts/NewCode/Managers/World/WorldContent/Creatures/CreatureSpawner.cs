@@ -1,5 +1,4 @@
-﻿
-// CreatureSpawner.cs — планировщик групп (данные-только) с отложенной инициализацией
+﻿// CreatureSpawner.cs — планировщик групп (данные-только) с отложенной инициализацией
 // Ждёт несколько кадров перед Initialize, чтобы мир/биомы успели построиться.
 
 using System;
@@ -8,6 +7,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using Game.Core;
 using Game.World.Map.Biome;
+using Game.World.Signals;    // для WorldRegen
+using Game.World.Objects;    // для CellSize при очистке (если потребуется)
 
 namespace Game.World.Creatures
 {
@@ -18,19 +19,27 @@ namespace Game.World.Creatures
         [SerializeField] private Transform player;
         [SerializeField] private MonoBehaviour biomeServiceRef;    // IBiomeService
         [SerializeField] private MonoBehaviour reservationRef;     // IReservationService
+        [Tooltip("Источник радиуса/размера клетки тайлов — PoolManager.")]
+        [SerializeField] private PoolManager tiles;                // ← НОВОЕ: синхронизация единиц
 
         private IBiomeService _biomes;
         private IReservationService _reserv;
 
         [Header("Rules & World")]
         [SerializeField] private CreatureSpawnRules rules;
-        [SerializeField] private int chunkSize = 64;
-        [SerializeField] private int streamRadiusChunks = 3;
-        [SerializeField] private float cellSize = 1f;
+        [SerializeField, Min(8)] private int chunkSize = 64;
+        [SerializeField, Min(1)] private int streamRadiusChunks = 3; // запасной лимит (обычно не нужен при круге)
+        [SerializeField] private float cellSize = 1f;                // будет переопределяться из tiles
         [SerializeField] private int worldSeed = 12345;
 
         [Header("Sampling")]
-        [SerializeField, Min(4)] private int gridStepCells = 12;   // больше попыток внутри чанка
+        [SerializeField, Min(4)] private int gridStepCells = 12;   // «растр» внутри чанка
+
+        [Header("Hysteresis")]
+        [Tooltip("+N клеток к радиусу для загрузки (0 — на альфу)")]
+        [SerializeField] private int loadPaddingCells = 0;
+        [Tooltip("+N клеток к радиусу для удержания (0 — на альфу)")]
+        [SerializeField] private int keepPaddingCells = 0;
 
         [Header("Lifecycle")]
         [Tooltip("Сколько кадров подождать до старта (даём миру построиться).")]
@@ -68,14 +77,18 @@ namespace Game.World.Creatures
 
         private void Awake()
         {
-            // Стартуем отложенно корутиной
+            WorldSignals.OnWorldRegen += OnWorldRegen;
             StartCoroutine(Co_DeferredInit());
+        }
+
+        private void OnDestroy()
+        {
+            WorldSignals.OnWorldRegen -= OnWorldRegen;
         }
 
         private IEnumerator Co_DeferredInit()
         {
             for (int i = 0; i < warmupFrames; i++) yield return null;
-
             Initialize(null);
         }
 
@@ -90,21 +103,47 @@ namespace Game.World.Creatures
             _activeChunks.Clear();
             _chunkGroups.Clear();
 
+            // Синхронизируем единицы (если есть PoolManager)
+            SyncUnitsFromTiles();
+
             var pos = player ? player.position : Vector3.zero;
             _lastPlayerChunk = WorldToChunk(WorldToCell(pos));
             UpdateStreaming(_lastPlayerChunk);
             _inited = true;
 
-            if (verbose) Debug.Log($"[CreatureSpawner] Init OK. chunk={chunkSize}, gridStep={gridStepCells}, streamR={streamRadiusChunks}");
+            if (verbose) Debug.Log($"[CreatureSpawner] Init OK. chunk={chunkSize}, gridStep={gridStepCells}, paddings=({loadPaddingCells},{keepPaddingCells})");
         }
 
         private void Update()
         {
             if (!_inited || !player) return;
+
+            // Подтягиваем единицы «вживую», как в ObjectChunkStreamer
+            SyncUnitsFromTiles();
+
             var pc = WorldToChunk(WorldToCell(player.position));
             if (pc == _lastPlayerChunk) return;
             _lastPlayerChunk = pc;
             UpdateStreaming(pc);
+        }
+
+        private void SyncUnitsFromTiles()
+        {
+            if (tiles == null) return;
+            // единицы под тайлы
+            cellSize = tiles.CellSizeWorld;
+            // streamRadiusChunks используется как лимит, но реальная зона — из кругa тайлов:
+            // сам радиус тайлов тянем непосредственно в UpdateStreaming
+        }
+
+        private void OnWorldRegen()
+        {
+            // Полный сброс планов и активных чанков
+            _chunkGroups.Clear();
+            _activeChunks.Clear();
+            _inited = false; // заставим пройти init заново при следующем кадре
+            if (verbose) Debug.Log("[CreatureSpawner] WorldRegen: cleared planned groups & active chunks.");
+            StartCoroutine(Co_DeferredInit());
         }
 
         // === Public API for PoolingCreatures ===
@@ -132,58 +171,62 @@ namespace Game.World.Creatures
         // === Streaming ===
         private void UpdateStreaming(Vector2Int centerChunk)
         {
-            // радиус в клетках — синхронизируй с PoolManager.radius
-            int tileRadius =60 /* подтянуть из PoolManager или через [SerializeField] */;
-            float cellSize = /* из Units/PoolManager */ 1f;
+            // Радиус тайлов в клетках берём из PoolManager (если есть),
+            // иначе пойдём от грубого лимита по чанкам.
+            int tileRadiusCells = tiles ? tiles.RadiusCells : (streamRadiusChunks * chunkSize);
+            float cs = cellSize;
 
-            float loadR = (tileRadius + 8) * cellSize;   // гистерезис загрузки
-            float keepR = (tileRadius + 12) * cellSize;   // гистерезис удержания
+            float loadR = (tileRadiusCells + loadPaddingCells) * cs; // мир
+            float keepR = (tileRadiusCells + keepPaddingCells) * cs; // мир
 
-            // центр круга — мир
+            // Центр круга в мире
             Vector2 c = (Vector2)player.position;
 
-            // перебираем чанки в окрестности "по чанкам"
-            int R = Mathf.CeilToInt((tileRadius + 12f) / (float)chunkSize) + 1;
+            // Сколько чанков проверять вокруг — считаем по полу-диагонали чанка
+            float chunkWorldSize = chunkSize * cs;
+            float halfDiag = 0.5f * chunkWorldSize * 1.41421356f; // sqrt(2)
+            int R = Mathf.CeilToInt((keepR + halfDiag) / chunkWorldSize);
 
             var shouldLoad = new HashSet<Vector2Int>();
             var shouldKeep = new HashSet<Vector2Int>();
 
             for (int dy = -R; dy <= R; dy++)
-            {
                 for (int dx = -R; dx <= R; dx++)
                 {
                     var ch = new Vector2Int(centerChunk.x + dx, centerChunk.y + dy);
 
-                    // ВАЖНО: прямоугольник чанка в world units
+                    // прямоугольник чанка в world units
                     Rect rect = new Rect(
-                        ch.x * chunkSize * cellSize,
-                        ch.y * chunkSize * cellSize,
-                        chunkSize * cellSize,
-                        chunkSize * cellSize
+                        ch.x * chunkWorldSize,
+                        ch.y * chunkWorldSize,
+                        chunkWorldSize,
+                        chunkWorldSize
                     );
 
                     if (CircleIntersectsRect(c, loadR, rect)) shouldLoad.Add(ch);
                     if (CircleIntersectsRect(c, keepR, rect)) shouldKeep.Add(ch);
                 }
-            }
 
             // SPAWN
             foreach (var ch in shouldLoad)
                 if (_activeChunks.Add(ch))
-                    LoadChunk(ch);                // <— тут твой метод сугубо для существ
+                    LoadChunk(ch);
 
             // DESPAWN
             var toRemove = new List<Vector2Int>();
             foreach (var ch in _activeChunks)
                 if (!shouldKeep.Contains(ch))
                 {
-                    UnloadChunk(ch);              // <— и тут тоже
+                    UnloadChunk(ch);
                     toRemove.Add(ch);
                 }
-            foreach (var ch in toRemove) _activeChunks.Remove(ch);
+            for (int i = 0; i < toRemove.Count; i++) _activeChunks.Remove(toRemove[i]);
+
+            if (verbose)
+                Debug.Log($"[CreatureSpawner] stream: load={shouldLoad.Count}, keep={shouldKeep.Count}, active={_activeChunks.Count}, R={R}, tileR={tileRadiusCells}");
         }
 
-        // Геометрия — оставь static в этом же классе
+        // Геометрия
         static bool CircleIntersectsRect(Vector2 c, float r, Rect rect)
         {
             float cx = Mathf.Clamp(c.x, rect.xMin, rect.xMax);
@@ -209,7 +252,6 @@ namespace Game.World.Creatures
                     var cell = new Vector2Int(baseCell.x + ox, baseCell.y + oy);
                     var biome = _biomes.GetBiomeAtPosition(cell);
 
-                    // используем fallback-правила, если биом ещё None
                     if (!rules.TryGetRuleOrFallback(biome, out var rule))
                     {
                         if (logReasons) Debug.Log($"[CreatureSpawner] skip(no rule+no fallback) biome={biome} at {cell}");
@@ -316,32 +358,31 @@ namespace Game.World.Creatures
         }
 
         // Helpers
-        private Vector2Int WorldToCell(Vector3 w) => new(Mathf.RoundToInt(w.x / cellSize), Mathf.RoundToInt(w.y / cellSize));
+        private Vector2Int WorldToCell(Vector3 w)
+        {
+            int x = Mathf.FloorToInt(w.x / cellSize);
+            int y = Mathf.FloorToInt(w.y / cellSize);
+            return new Vector2Int(x, y);
+        }
+
         private Vector2Int WorldToChunk(Vector2Int cell)
         {
             int cx = cell.x >= 0 ? cell.x / chunkSize : (cell.x - (chunkSize - 1)) / chunkSize;
             int cy = cell.y >= 0 ? cell.y / chunkSize : (cell.y - (chunkSize - 1)) / chunkSize;
             return new Vector2Int(cx, cy);
         }
-        private Vector2Int ChunkToWorldCell(Vector2Int chunk) => new(chunk.x * chunkSize, chunk.y * chunkSize);
 
-        private HashSet<Vector2Int> WantedChunks(Vector2Int center, int r)
-        {
-            var set = new HashSet<Vector2Int>();
-            for (int dx = -r; dx <= r; dx++)
-                for (int dy = -r; dy <= r; dy++)
-                    set.Add(new Vector2Int(center.x + dx, center.y + dy));
-            return set;
-        }
+        private Vector2Int ChunkToWorldCell(Vector2Int chunk) => new(chunk.x * chunkSize, chunk.y * chunkSize);
 
         private static int NextRange(System.Random rng, int minInclusive, int maxInclusive)
         { if (minInclusive > maxInclusive) (minInclusive, maxInclusive) = (maxInclusive, minInclusive); return minInclusive + rng.Next(maxInclusive - minInclusive + 1); }
+
         private static int Hash3(int a, int b, int c) => (a * 73856093) ^ (b * 19349663) ^ (c * 83492791);
+
         private static ulong MakeId(Vector2Int center, CreatureProfile p, int idx)
         { unchecked { uint h = (uint)Hash3(center.x, center.y, p ? p.name.GetHashCode() : 0); return ((ulong)h << 32) | (uint)idx; } }
+
         private static Vector2 RandInCircle(float r, System.Random rng)
         { double ang = rng.NextDouble() * Math.PI * 2.0; double rad = rng.NextDouble() * r; return new Vector2((float)(rad * Math.Cos(ang)), (float)(rad * Math.Sin(ang))); }
-
-        private static readonly List<Vector2Int> _toRemove = new(16);
     }
 }

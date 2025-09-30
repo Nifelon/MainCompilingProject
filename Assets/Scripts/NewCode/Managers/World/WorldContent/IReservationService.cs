@@ -11,14 +11,13 @@ public enum ReservationMask
     All = ~0
 }
 
+// IReservationService.cs
 public interface IReservationService
 {
-    // Пометить круг клеток флагами mask. Возвращает кол-во помеченных клеток.
     int ReserveCircle(Vector2Int center, int radius, ReservationMask mask);
-
-    // Снять флаги mask в круге. (Удаляет ключ, если маска стала пустой.)
     void ReleaseCircle(Vector2Int center, int radius, ReservationMask mask);
-
-    // Проверить, есть ли пересечение mask в клетке.
     bool IsReserved(Vector2Int cell, ReservationMask mask);
+
+    // НОВОЕ: полный сброс (на WorldRegen/смену сида)
+    void ClearAll();
 }

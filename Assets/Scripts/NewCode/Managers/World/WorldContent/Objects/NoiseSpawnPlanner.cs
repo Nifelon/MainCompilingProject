@@ -142,7 +142,7 @@ namespace Game.World.Objects.Spawning
         private bool IsAllowed(BiomeType neededBiome, BiomeObjectRule rule, Vector2Int cell, HashSet<Vector2Int> occ, bool noiseGate = true)
         {
             // 0) Резервации
-            if (_reservation != null && _reservation.IsReserved(cell, ReservationMask.All))
+            if (_reservation != null && _reservation.IsReserved(cell, ReservationMask.Nature))
                 return false;
 
             // 1) Биом клетки (на всякий случай оставим, хотя уже отобрано по списку)

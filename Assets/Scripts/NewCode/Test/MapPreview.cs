@@ -1,7 +1,9 @@
 ﻿using Game.Core;
 using Game.World.Map.Biome;
+using Game.World.Signals;
 using UnityEngine;
 using UnityEngine.UI;
+//using Game.World.Signals;
 
 namespace Game.UI
 {
@@ -27,7 +29,14 @@ namespace Game.UI
             _biomes = ctx.GetService<IBiomeService>();
             RebuildTexture();
         }
+        private void OnEnable() { WorldSignals.OnWorldRegen += OnWorldRegen; }
+        private void OnDisable() { WorldSignals.OnWorldRegen -= OnWorldRegen; }
 
+        private void OnWorldRegen()
+        {
+            // мир/биомы уже перестроены — перерисуем текстуру
+            RebuildTexture();
+        }
         public void SetDownscale(int ds)
         {
             ds = Mathf.Max(1, ds);

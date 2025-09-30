@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: acb5ae91b2115614587b9f43b85804b9, type: 3}
   m_Name: Workbench
   m_EditorClassIdentifier: 
-  type: 10
+  type: 104
   displayName: "\u0412\u0435\u0440\u0441\u0442\u0430\u043A"
   footprint: {x: 2, y: 2}
   pivotOffsetWorld: {x: 0, y: 0}

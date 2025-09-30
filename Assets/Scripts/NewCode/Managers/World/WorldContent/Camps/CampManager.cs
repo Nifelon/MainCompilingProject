@@ -348,18 +348,28 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
     private void SpawnCampRuntime(CampRuntime camp)
     {
-        // 0) Резервация и оверрайд спрайтов тайлов
-        if (Reservation != null)
-            Reservation.ReserveCircle(camp.CenterCell, profile.campRadius + reservePadding, ReservationMask.All);
+        // === 0) Резервация + грунт ===
+        const ReservationMask CAMP_MASK =
+            ReservationMask.Camps | ReservationMask.Nature | ReservationMask.Creatures;
+
+        // Подмести природу в зоне лагеря (до резервации/визуала)
+        if (objectManager != null)
+        {
+            var worldCenter = (camp.CenterCell + new Vector2(0.5f, 0.5f)) * objectManager.CellSize;
+            float worldRadius = (profile.campRadius + reservationPadding) * objectManager.CellSize;
+            objectManager.RemoveObjectsInCircle(worldCenter, worldRadius);
+        }
+
+        Reservation?.ReserveCircle(camp.CenterCell, profile.campRadius + reservationPadding, CAMP_MASK);
 
         if (GroundSprite != null && profile.campGroundSprite != null)
             GroundSprite.SetSpriteCircle(camp.CenterCell, profile.campRadius, profile.campGroundSprite);
 
-        if (mainTiles != null)
-            mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
+        // Обновить тайлы вокруг (одинаковый паддинг везде)
+        mainTiles?.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
 
-        // 1) Спавн структур
-        var rngStruct = new Random(Hash3(
+        // === 1) Структуры ===
+        var rngStruct = new System.Random(Hash3(
             worldSeed, profile.seedSalt,
             camp.CenterCell.x * 48611 ^ camp.CenterCell.y * 1223
         ));
@@ -383,12 +393,13 @@ public class CampManager : MonoBehaviour, IWorldSystem
                         ? Instantiate(data.prefabOverride, transform)
                         : (objectsPool != null ? objectsPool.Get(data.type) : new GameObject($"{s.type}"));
 
-                    go.transform.position = CellToWorld(cellPos)
-                                          + (Vector3)data.pivotOffsetWorld
-                                          + ((data.tags & ObjectTags.HighSprite) != 0
-                                                ? Vector3.up * data.visualHeightUnits
-                                                : Vector3.zero);
-
+                    // центр клетки + pivot/высота
+                    var worldPos = CellToWorld(cellPos)
+                                   + (Vector3)data.pivotOffsetWorld
+                                   + (((data.tags & ObjectTags.HighSprite) != 0)
+                                       ? Vector3.up * data.visualHeightUnits
+                                       : Vector3.zero);
+                    go.transform.position = worldPos;
                     SetZByY(go.transform);
 
                     var sr = go.GetComponentInChildren<SpriteRenderer>() ?? go.AddComponent<SpriteRenderer>();
@@ -402,16 +413,16 @@ public class CampManager : MonoBehaviour, IWorldSystem
                     sr.sortingLayerID = SortingLayer.NameToID("Objects");
 
                     if (sr.sprite == null)
-                        Debug.LogWarning($"[CampManager] Sprite is NULL for {s.type} at {cellPos}. Fill ObjectData.spriteVariants or prefab.");
+                        Debug.LogWarning($"[CampManager] Sprite is NULL for {s.type} at {cellPos}");
 
                     camp.Structures.Add(go);
                 }
             }
         }
 
-        // 2) NPC — ТОЛЬКО ПЛАНИРОВАНИЕ (без Instantiate)
+        // === 2) NPC — план ===
         var GOLDEN32 = unchecked((int)0x9E3779B9u);
-        var rngNpc = new Random(Hash3(
+        var rngNpc = new System.Random(Hash3(
             worldSeed, profile.seedSalt ^ GOLDEN32,
             camp.CenterCell.x * 7349 ^ camp.CenterCell.y * 3163
         ));
@@ -420,21 +431,9 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
         if (profile != null && profile.npcPack != null &&
             profile.npcPack.entries != null && profile.npcPack.entries.Count > 0)
-        {
             PlanNpcPack(camp, rngNpc);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if (verboseLogs)
-                Debug.Log($"[CampManager] Planned NPCs from npcPack: {camp.PlannedNpcs.Count}");
-#endif
-        }
         else if (profile != null && profile.npcRoles != null)
-        {
             PlanNpcLegacy(camp, rngNpc);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if (verboseLogs)
-                Debug.Log($"[CampManager] Planned NPCs (legacy roles): {camp.PlannedNpcs.Count}");
-#endif
-        }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (verboseLogs)
@@ -444,21 +443,19 @@ public class CampManager : MonoBehaviour, IWorldSystem
 
     private void DespawnCampRuntime(CampRuntime camp)
     {
-        // 0) Снять оверрайд спрайтов и резервацию
-        if (GroundSprite != null)
-            GroundSprite.ClearSpriteCircle(camp.CenterCell, profile.campRadius);
+        // === 0) Откат визуала + резерваций ===
+        GroundSprite?.ClearSpriteCircle(camp.CenterCell, profile.campRadius);
 
-        if (Reservation != null)
-        {
-            Reservation.ReleaseCircle(
-                camp.CenterCell,
-                profile.campRadius + reservationPadding,
-                ReservationMask.Nature | ReservationMask.Camps
-            );
-        }
+        const ReservationMask CAMP_MASK =
+            ReservationMask.Camps | ReservationMask.Nature | ReservationMask.Creatures;
 
-        if (mainTiles != null)
-            mainTiles.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
+        Reservation?.ReleaseCircle(
+            camp.CenterCell,
+            profile.campRadius + reservationPadding,
+            CAMP_MASK
+        );
+
+        mainTiles?.RefreshCellsInCircle(camp.CenterCell, profile.campRadius + reservationPadding);
 
         // 1) Ковёр
         if (camp.GroundPatch) Destroy(camp.GroundPatch);
@@ -473,7 +470,7 @@ public class CampManager : MonoBehaviour, IWorldSystem
         }
         camp.Structures.Clear();
 
-        // 3) NPC (только данные)
+        // 3) NPC план
         camp.PlannedNpcs.Clear();
     }
 

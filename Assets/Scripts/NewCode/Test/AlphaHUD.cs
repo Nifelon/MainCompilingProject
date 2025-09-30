@@ -1,13 +1,24 @@
 ﻿using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
+using Game.World.Signals;
+using Game.World.Objects;
+using Game.World; // если тут WorldManager
+// using Game.World.Tiles; // если PoolManagerMainTile в другом неймспейсе
+// using Game.World.Content.Services; // если ReservationService в другом неймспейсе
 
 namespace Game.UI
 {
     public class AlphaHUD : MonoBehaviour
     {
+        [SerializeField] PoolManager poolManager;
         [Header("World (optional)")]
-        [SerializeField] private WorldManager world;   // ← притащи из инспектора ИЛИ оставь пустым
+        [SerializeField] private WorldManager world;   // ← можно оставить пустым, подхватим из GlobalCore
+
+        [Header("World visuals/services (optional)")]
+        [SerializeField] private ObjectManager objectManager;
+        [SerializeField] private PoolManagerMainTile mainTilePool;
+        [SerializeField] private ReservationService reservation; // или IReservationService, если удобнее
 
         [Header("UI Refs")]
         [SerializeField] private Text seedText;
@@ -35,7 +46,7 @@ namespace Game.UI
             }
         }
 
-        public void Bind(WorldManager wm)   // ← чтобы LabStarter мог вколоть ссылку
+        public void Bind(WorldManager wm)
         {
             world = wm;
             _wmCache = wm;
@@ -45,8 +56,13 @@ namespace Game.UI
         private readonly int[] _dsOptions = { 1, 2, 4 };
         private int _dsIndex;
 
-        private void Awake()
+        void Awake()
         {
+            // подхватим сервисы, если не проставлены в инспекторе
+            if (!objectManager) objectManager = FindAnyObjectByType<ObjectManager>(FindObjectsInactive.Exclude);
+            if (!mainTilePool) mainTilePool = FindAnyObjectByType<PoolManagerMainTile>(FindObjectsInactive.Exclude);
+            if (!reservation) reservation = FindAnyObjectByType<ReservationService>(FindObjectsInactive.Exclude);
+
             if (rebuildSameBtn) rebuildSameBtn.onClick.AddListener(RebuildSame);
             if (rebuildNewBtn) rebuildNewBtn.onClick.AddListener(RebuildNew);
             if (savePngBtn) savePngBtn.onClick.AddListener(SavePng);
@@ -54,12 +70,10 @@ namespace Game.UI
             if (Close_OpenBtn) Close_OpenBtn.onClick.AddListener(сlose_OpenWindow);
         }
 
-        private void Start()
+        void Start()
         {
-            // если мир ещё не найден — попробуем сейчас (до LabStarter это норм)
             _ = WM;
 
-            // выставим текущий DS-индекс под MapPreview
             _dsIndex = 0;
             if (mapPreview != null)
                 for (int i = 0; i < _dsOptions.Length; i++)
@@ -84,18 +98,40 @@ namespace Game.UI
             }
         }
 
-        private void RebuildSame()
-        {
-            WM?.RebuildWorld();
-            RefreshLabels(true);
-        }
+        private void RebuildSame() => DoWorldRegen(null);
 
         private void RebuildNew()
         {
-            var wm = WM;
-            if (wm == null) return;
             int newSeed = Random.Range(int.MinValue, int.MaxValue);
-            wm.RebuildWorld(newSeed: newSeed);
+            DoWorldRegen(newSeed);
+        }
+
+        /// <summary>
+        /// Полный реген: очистка визуала/резерваций → сигнал → пересборка мира → обновление UI.
+        /// </summary>
+        private void DoWorldRegen(int? newSeed)
+        {
+            // 1) очистка визуала/резервов
+            objectManager?.DespawnAll();
+            mainTilePool?.ClearAll();
+            reservation?.ClearAll();
+
+            // 2) СНАЧАЛА пересобрать мир (биомы/карта)
+            var wm = WM;
+            if (wm != null)
+            {
+                if (newSeed.HasValue) wm.RebuildWorld(newSeed.Value);
+                else wm.RebuildWorld();
+            }
+
+            // 3) ТЕПЕРЬ оповестить всех
+            WorldSignals.FireWorldRegen();
+
+            // 4) И сразу “ткнуть” тайловый менеджер
+            poolManager?.ForceRefresh();
+
+            // 5) миникарта
+            mapPreview?.RebuildTexture();
             RefreshLabels(true);
         }
 
@@ -120,6 +156,7 @@ namespace Game.UI
             if (mapPreview != null) mapPreview.SetDownscale(ds);
             RefreshLabels();
         }
+
         void сlose_OpenWindow() => mapPreview?.Close_OpenWindow();
     }
 }

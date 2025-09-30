@@ -601,7 +601,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93e34c4ffa112ae4cb608f102cb64ab1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  poolManager: {fileID: 6399086736470901221}
   world: {fileID: 8987966179204011232}
+  objectManager: {fileID: 4639616611306919125}
+  mainTilePool: {fileID: 3530968856090565311}
+  reservation: {fileID: 2592831993149767884}
   seedText: {fileID: 20719700}
   sizeText: {fileID: 650539092}
   timeText: {fileID: 749140990}
@@ -2387,12 +2391,15 @@ MonoBehaviour:
   player: {fileID: 1687318613}
   biomeServiceRef: {fileID: 1237252027985226769}
   reservationRef: {fileID: 2592831993149767884}
+  tiles: {fileID: 0}
   rules: {fileID: 11400000, guid: 2bb092c06356f3d4fb5862d3ca08c6b8, type: 2}
   chunkSize: 64
   streamRadiusChunks: 3
   cellSize: 1
   worldSeed: 12345
   gridStepCells: 16
+  loadPaddingCells: 0
+  keepPaddingCells: 0
   warmupFrames: 2
   verbose: 0
   logReasons: 0
@@ -2535,6 +2542,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 061f6c6c92d4ee84fa3e9115e80cfcff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cellSize: 1
 --- !u!1 &3142222300192607673
 GameObject:
   m_ObjectHideFlags: 0
@@ -2573,7 +2581,7 @@ Transform:
   m_GameObject: {fileID: 3142222300192607673}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 552.23425, y: 286.43356, z: 0.0038681698}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2639,6 +2647,7 @@ MonoBehaviour:
   plannerBehaviour: {fileID: 653588205}
   viewBehaviour: {fileID: 681795791}
   reservationBehaviour: {fileID: 2592831993149767884}
+  reservationMaskForThisManager: 1
 --- !u!114 &5066883540583078986
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2665,11 +2674,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   player: {fileID: 1772076462}
   mainTilePool: {fileID: 3530968856090565311}
-  objectManager: {fileID: 4639616611306919125}
   radius: 55
   cellSize: 1
-  objectsChunkSize: 64
-  objectsChunkRadius: 2
 --- !u!114 &7827125496584607237
 MonoBehaviour:
   m_ObjectHideFlags: 0

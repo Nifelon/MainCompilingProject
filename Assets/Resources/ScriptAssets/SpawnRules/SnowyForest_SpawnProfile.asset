@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   biome: 1
   rules:
-  - objectType: 2
+  - objectType: 3
     targetPerChunk: 400
     mode: 1
     clusterCountRange: {x: 4, y: 8}
@@ -25,7 +25,7 @@ MonoBehaviour:
     noiseThreshold: 0.5
     noiseScale: 0.06
     variants: 3
-  - objectType: 5
+  - objectType: 6
     targetPerChunk: 12
     mode: 1
     clusterCountRange: {x: 3, y: 5}
@@ -36,7 +36,7 @@ MonoBehaviour:
     noiseThreshold: 0.55
     noiseScale: 0.07
     variants: 1
-  - objectType: 3
+  - objectType: 7
     targetPerChunk: 12
     mode: 2
     clusterCountRange: {x: 0, y: 0}
@@ -46,5 +46,5 @@ MonoBehaviour:
     useNoiseGate: 1
     noiseThreshold: 0.55
     noiseScale: 0.07
-    variants: 2
+    variants: 1
   densityMultiplier: 1

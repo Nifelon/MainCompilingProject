@@ -2,6 +2,7 @@
 using UnityEngine;
 using Game.World.Map.Biome; // IBiomeService / BiomeManager
 using Game.World.Objects;   // ObjectManager (визуал объектов грузим/выгружаем через него)
+using Game.World.Signals;
 
 [DefaultExecutionOrder(-200)]
 public class PoolManager : MonoBehaviour
@@ -39,6 +40,15 @@ public class PoolManager : MonoBehaviour
         _biomes = FindFirstObjectByType<BiomeManager>(FindObjectsInactive.Exclude);
         if (_biomes != null && _biomes.IsBiomesReady) BindBiomeSpriteAndRefresh();
         else StartCoroutine(CoBindWhenReady());
+    }
+    void OnEnable() { WorldSignals.OnWorldRegen += HandleWorldRegen; }
+    void OnDisable() { WorldSignals.OnWorldRegen -= HandleWorldRegen; }
+
+    void HandleWorldRegen()
+    {
+        // Сбросим маркер «последней клетки» и принудительно перерисуем окно
+        _lastCell = new Vector2Int(int.MinValue, int.MinValue);
+        ForceRefresh();
     }
 
     System.Collections.IEnumerator CoBindWhenReady()
