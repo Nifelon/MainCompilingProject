@@ -1,27 +1,40 @@
+using System;
 using System.Collections.Generic;
 
 public static class InventoryService
 {
-    static readonly Dictionary<string, int> _stacks = new();
+    public static event Action OnChanged;
 
-    public static bool TryAdd(string id, int n)
+    static readonly Dictionary<ItemId, int> _stacks = new();
+    public static IReadOnlyDictionary<ItemId, int> All => _stacks;
+
+    public static int Count(ItemId id) => _stacks.TryGetValue(id, out var v) ? v : 0;
+
+    public static void Add(ItemId id, int amt)
     {
-        if (string.IsNullOrEmpty(id) || n <= 0) return false;
-        _stacks[id] = _stacks.GetValueOrDefault(id) + n;
+        if (amt <= 0) return;
+        _stacks[id] = Count(id) + amt;
+        OnChanged?.Invoke();
+    }
+
+    public static bool Remove(ItemId id, int amt)
+    {
+        if (amt <= 0) return true;
+        var cur = Count(id);
+        if (cur < amt) return false;
+        cur -= amt;
+        if (cur <= 0) _stacks.Remove(id);
+        else _stacks[id] = cur;
+        OnChanged?.Invoke();
         return true;
     }
 
-    public static bool TryRemove(string id, int n)
+    // Мост для старых мест, где пока приходят строковые id (например из ObjectData.harvest)
+    public static bool TryAddByName(string itemName, int amt, ItemDatabase db)
     {
-        if (string.IsNullOrEmpty(id) || n <= 0) return false;
-        int have = _stacks.GetValueOrDefault(id);
-        if (have < n) return false;
-        have -= n;
-        if (have == 0) _stacks.Remove(id);
-        else _stacks[id] = have;
+        var so = db ? db.GetByName(itemName) : null;
+        if (!so) return false;
+        Add(so.id, amt);
         return true;
     }
-
-    public static int Count(string id) => _stacks.GetValueOrDefault(id);
-    public static IReadOnlyDictionary<string, int> All => _stacks;
 }

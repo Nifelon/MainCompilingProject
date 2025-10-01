@@ -1,13 +1,11 @@
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
+
 public class Inventory : MonoBehaviour
 {
-    [SerializeField] private ItemDatabase db;
-    private readonly Dictionary<string, int> _stacks = new();
-    public event System.Action OnChanged;
-
-    public bool Add(string id, int n) { if (n <= 0) return false; _stacks[id] = _stacks.GetValueOrDefault(id) + n; OnChanged?.Invoke(); return true; }
-    public bool Remove(string id, int n) { int have = _stacks.GetValueOrDefault(id); if (have < n) return false; have -= n; if (have == 0) _stacks.Remove(id); else _stacks[id] = have; OnChanged?.Invoke(); return true; }
-    public int Count(string id) => _stacks.GetValueOrDefault(id);
-    public IReadOnlyDictionary<string, int> All => _stacks;
+    public event System.Action OnChanged { add => InventoryService.OnChanged += value; remove => InventoryService.OnChanged -= value; }
+    public bool Add(ItemId id, int n) { InventoryService.Add(id, n); return true; }
+    public bool Remove(ItemId id, int n) => InventoryService.Remove(id, n);
+    public int Count(ItemId id) => InventoryService.Count(id);
+    public IReadOnlyDictionary<ItemId, int> All => InventoryService.All;
 }
