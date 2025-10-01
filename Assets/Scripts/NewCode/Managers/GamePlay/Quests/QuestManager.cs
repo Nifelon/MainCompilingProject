@@ -1,105 +1,118 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
-
-public enum QuestType { Kill, Collect, Craft }
-
-[Serializable]
-public class Quest
-{
-    public string id;
-    public QuestType type;
-    public string targetId;         // "Wolf", "Berry", "Patch"
-    public int targetCount = 1;
-    [NonSerialized] public int progress = 0;
-    [NonSerialized] public bool isActive = false;
-    [NonSerialized] public bool isDone = false;
-
-    public string Title =>
-        type switch
-        {
-            QuestType.Kill => $"Убить {targetId}",
-            QuestType.Collect => $"Собрать {targetId}",
-            QuestType.Craft => $"Скрафтить {targetId}",
-            _ => id
-        };
-}
 
 public class QuestManager : MonoBehaviour
 {
-    [Tooltip("Список доступных квестов (заполняем в инспекторе)")]
-    public List<Quest> quests = new();
+    [Header("Quests")]
+    public List<QuestConfig> quests = new();
+    [SerializeField] private string activeQuestId;
 
-    public Quest Active { get; private set; }
+    public event Action<QuestConfig> OnQuestChanged;
 
-    public event Action<Quest> OnQuestChanged;   // активирован/завершён/прогресс
+    QuestConfig Active => quests.FirstOrDefault(q => q.id == activeQuestId);
 
     void OnEnable()
     {
-        QuestEventBus.OnUnitKilled += HandleKill;
         QuestEventBus.OnCollect += HandleCollect;
+        QuestEventBus.OnUnitKilled += HandleKill;
         QuestEventBus.OnCraft += HandleCraft;
     }
     void OnDisable()
     {
-        QuestEventBus.OnUnitKilled -= HandleKill;
         QuestEventBus.OnCollect -= HandleCollect;
+        QuestEventBus.OnUnitKilled -= HandleKill;
         QuestEventBus.OnCraft -= HandleCraft;
     }
 
+    // UI: взять следующий доступный
     public void ActivateAnyAvailable()
     {
-        if (Active != null && !Active.isDone) return;
-        foreach (var q in quests)
-        {
-            if (!q.isDone)
-            {
-                Activate(q);
-                return;
-            }
-        }
-        Debug.Log("[Quests] Нет доступных квестов.");
+        var q = quests.FirstOrDefault(x => x.state == QuestProgressState.NotStarted);
+        if (q == null) return;
+        ActivateById(q.id);
     }
 
     public void ActivateById(string id)
     {
-        var q = quests.Find(x => x.id == id);
-        if (q != null) Activate(q);
-    }
+        var q = quests.FirstOrDefault(x => x.id == id);
+        if (q == null) return;
 
-    void Activate(Quest q)
-    {
-        Active = q;
-        q.isActive = true;
         q.progress = 0;
-        OnQuestChanged?.Invoke(q);
-        Debug.Log($"[Quests] Активирован: {q.Title} ({q.progress}/{q.targetCount})");
+        q.state = QuestProgressState.Active;
+        activeQuestId = q.id;
+        FireChanged(q);
     }
 
-    void CompleteActiveIfReady()
+    public void CompleteActiveAndAdvance()
     {
-        if (Active != null && Active.progress >= Active.targetCount)
+        var q = Active;
+        if (q == null) return;
+        q.state = QuestProgressState.Completed;
+        FireChanged(q);
+
+        // автопереход на следующий NotStarted (не обязательно)
+        var next = quests.FirstOrDefault(x => x.state == QuestProgressState.NotStarted);
+        if (next != null)
         {
-            Active.isDone = true;
-            Active.isActive = false;
-            OnQuestChanged?.Invoke(Active);
-            Debug.Log($"[Quests] Завершён: {Active.Title}");
-            Active = null;
+            ActivateById(next.id);
         }
     }
 
-    void Bump(QuestType type, string id, int count)
-    {
-        if (Active == null || Active.isDone) return;
-        if (Active.type != type) return;
-        if (!string.Equals(Active.targetId, id, StringComparison.OrdinalIgnoreCase)) return;
+    // --- Event handlers ---
 
-        Active.progress = Mathf.Min(Active.progress + count, Active.targetCount);
-        OnQuestChanged?.Invoke(Active);
-        CompleteActiveIfReady();
+    void HandleCollect(string itemId, int amount)
+    {
+        var q = Active;
+        if (q == null || q.state != QuestProgressState.Active) return;
+        if (q.kind != QuestKind.Collect) return;
+        if (!IdEq(q.targetId, itemId)) return;
+
+        Bump(q, amount);
     }
 
-    void HandleKill(string unitKind) => Bump(QuestType.Kill, unitKind, 1);
-    void HandleCollect(string id, int c) => Bump(QuestType.Collect, id, c);
-    void HandleCraft(string id, int c) => Bump(QuestType.Craft, id, c);
+    void HandleKill(string unitKind)
+    {
+        var q = Active;
+        if (q == null || q.state != QuestProgressState.Active) return;
+        if (q.kind != QuestKind.Kill) return;
+        if (!IdEq(q.targetId, unitKind)) return;
+
+        Bump(q, 1);
+    }
+
+    void HandleCraft(string itemId, int amount)
+    {
+        var q = Active;
+        if (q == null || q.state != QuestProgressState.Active) return;
+        if (q.kind != QuestKind.Craft) return;
+        if (!IdEq(q.targetId, itemId)) return;
+
+        Bump(q, amount);
+    }
+
+    void Bump(QuestConfig q, int delta)
+    {
+        q.progress = Mathf.Clamp(q.progress + Mathf.Max(0, delta), 0, Mathf.Max(1, q.targetCount));
+        if (q.progress >= q.targetCount)
+        {
+            q.state = QuestProgressState.Completed;
+        }
+        FireChanged(q);
+    }
+
+    static bool IdEq(string a, string b) =>
+        !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b)
+        && string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    void FireChanged(QuestConfig q) => OnQuestChanged?.Invoke(q);
+
+    // Вспомогательное API для UI
+    public QuestConfig GetActive() => Active;
+    public int GetActiveProgress() => Active?.progress ?? 0;
+    public int GetActiveTarget() => Active?.targetCount ?? 0;
+    public string GetActiveTitle() => Active?.title ?? "";
+    public string GetActiveTargetId() => Active?.targetId ?? "";
+    public bool IsActiveCompleted() => Active?.state == QuestProgressState.Completed;
 }

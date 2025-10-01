@@ -3,38 +3,55 @@ using UnityEngine.UI;
 
 public class QuestTrackerUI : MonoBehaviour
 {
-    [SerializeField] QuestManager questManager;
+    [Header("Refs")]
+    [SerializeField] QuestManager quests;
+
+    [Header("UI")]
     [SerializeField] Text titleText;
     [SerializeField] Text progressText;
-
-    void Reset()
-    {
-        questManager = FindAnyObjectByType<QuestManager>(FindObjectsInactive.Exclude);
-        var texts = GetComponentsInChildren<Text>(true);
-        if (texts.Length >= 2) { titleText = texts[0]; progressText = texts[1]; }
-    }
+    [SerializeField] Slider progressBar;
+    [SerializeField] GameObject completedMark; // галочка / булавка
 
     void OnEnable()
     {
-        if (!questManager) questManager = FindAnyObjectByType<QuestManager>(FindObjectsInactive.Exclude);
-        if (questManager) questManager.OnQuestChanged += Refresh;
-        Refresh(null);
-    }
-    void OnDisable()
-    {
-        if (questManager) questManager.OnQuestChanged -= Refresh;
+        if (quests != null) quests.OnQuestChanged += Refresh;
+        Refresh(quests != null ? quests.GetActive() : null);
     }
 
-    void Refresh(Quest _)
+    void OnDisable()
     {
-        var q = questManager ? questManager.Active : null;
+        if (quests != null) quests.OnQuestChanged -= Refresh;
+    }
+
+    public void Refresh(QuestConfig q)
+    {
         if (q == null)
         {
-            if (titleText) titleText.text = "Квест не выбран";
-            if (progressText) progressText.text = "";
+            SetEmpty();
             return;
         }
-        if (titleText) titleText.text = q.Title;
-        if (progressText) progressText.text = $"{q.progress}/{q.targetCount}" + (q.isDone ? " ✓" : "");
+
+        int cur = q.progress;
+        int max = Mathf.Max(1, q.targetCount);
+
+        if (titleText) titleText.text = string.IsNullOrEmpty(q.title) ? q.id : q.title;
+        if (progressText) progressText.text = $"{cur}/{max} ({q.targetId})";
+
+        if (progressBar)
+        {
+            progressBar.minValue = 0;
+            progressBar.maxValue = max;
+            progressBar.value = cur;
+        }
+
+        if (completedMark) completedMark.SetActive(q.state == QuestProgressState.Completed);
+    }
+
+    void SetEmpty()
+    {
+        if (titleText) titleText.text = "Нет активного квеста";
+        if (progressText) progressText.text = "";
+        if (progressBar) progressBar.value = 0;
+        if (completedMark) completedMark.SetActive(false);
     }
 }

@@ -15,6 +15,7 @@ public static class InventoryService
         if (amt <= 0) return;
         _stacks[id] = Count(id) + amt;
         OnChanged?.Invoke();
+        QuestEventBus.RaiseCollect(id.ToString(), amt);
     }
 
     public static bool Remove(ItemId id, int amt)
