@@ -1,20 +1,11 @@
+// Assets/Scripts/NewCode/GamePlay/Item/ItemSO.cs
 using UnityEngine;
-using System.Collections.Generic;
 
-[CreateAssetMenu(menuName = "Game/Items/Item")]
+[CreateAssetMenu(menuName = "Game/Items/ItemNew", fileName = "Item_")]
 public class ItemSO : ScriptableObject
 {
-    public string id;
+    public ItemId id;
     public string displayName;
     public Sprite icon;
-    public int maxStack = 99;
-    public List<ItemActionDef> actions; // на альфу можно пусто
-}
-
-[System.Serializable]
-public class ItemActionDef
-{
-    public string actionId; // "consume", "equip", ...
-    public int intParam;
-    public string strParam;
+    [Min(1)] public int maxStack = 99;
 }

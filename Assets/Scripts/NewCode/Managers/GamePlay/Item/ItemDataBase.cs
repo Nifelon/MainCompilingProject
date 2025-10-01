@@ -1,17 +1,20 @@
-using UnityEngine;
 using System.Collections.Generic;
-using System;
+using System.Linq;
+using UnityEngine;
 
-[CreateAssetMenu(menuName = "Game/Items/Database")]
+[CreateAssetMenu(menuName = "Game/Items/ItemDatabase", fileName = "ItemDatabase")]
 public class ItemDatabase : ScriptableObject
 {
-    public ItemSO[] items;
-    private Dictionary<string, ItemSO> _byId;
-    public ItemSO Get(string id) { _byId ??= Build(); return _byId.TryGetValue(id, out var so) ? so : null; }
-    private Dictionary<string, ItemSO> Build()
+    public List<ItemSO> items = new();
+    Dictionary<ItemId, ItemSO> _byId;
+    Dictionary<string, ItemSO> _byName; // для моста со строчными id
+
+    void Ensure()
     {
-        var d = new Dictionary<string, ItemSO>(StringComparer.OrdinalIgnoreCase);
-        foreach (var it in items) { if (string.IsNullOrEmpty(it.id) || d.ContainsKey(it.id)) Debug.LogError($"Duplicate/empty item id: {it?.displayName}"); else d[it.id] = it; }
-        return d;
+        if (_byId == null) _byId = items.Where(i => i).ToDictionary(i => i.id, i => i);
+        if (_byName == null) _byName = items.Where(i => i).ToDictionary(i => i.name, i => i);
     }
+
+    public ItemSO Get(ItemId id) { Ensure(); return _byId.TryGetValue(id, out var so) ? so : null; }
+    public ItemSO GetByName(string name) { Ensure(); return _byName.TryGetValue(name, out var so) ? so : null; }
 }
