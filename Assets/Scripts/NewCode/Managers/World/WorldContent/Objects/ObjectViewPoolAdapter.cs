@@ -1,10 +1,11 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using Game.World.Objects;
+using UnityEngine.Tilemaps;
 
 namespace Game.World.Objects
 {
-    /// Обёртка над PoolManagerObjects: спаун/деспаун + установка спрайта/сортировки/коллайдера.
+    /// Обёртка над PoolManagerObjects: спаун/деспаун + установка спрайта/сортировки/коллайдера + harvest-инициализация.
     [DefaultExecutionOrder(-205)]
     public sealed class ObjectViewPoolAdapter : MonoBehaviour, IObjectView
     {
@@ -12,7 +13,7 @@ namespace Game.World.Objects
         [SerializeField] private PoolManagerObjects pool;
 
         [Header("Database")]
-        [Tooltip("Список данных объектов (ObjectData) для маппинга type -> спрайты/футпринт и т.п.")]
+        [Tooltip("Список данных объектов (ObjectData) для маппинга type -> спрайты/футпринт/harvest.")]
         [SerializeField] private List<ObjectData> objectDatabase = new();
 
         [Header("Rendering")]
@@ -27,6 +28,10 @@ namespace Game.World.Objects
         [SerializeField] private bool preferCapsuleForTallSprites = true;
         [Tooltip("Считать спрайт «высоким», если высота/ширина ≥ этого порога")]
         [SerializeField] private float tallAspectThreshold = 1.4f;
+
+        [Header("Grid")]
+        [Tooltip("Размер клетки в мировых координатах (для передачи cell в harvest).")]
+        [SerializeField] private float cellSize = 1f;
 
         // cache
         private readonly Dictionary<ObjectType, ObjectData> _byType = new();
@@ -79,6 +84,28 @@ namespace Game.World.Objects
             wref.id = inst.id;
             wref.type = inst.type;
 
+            // 7) Harvest: включить/настроить по данным
+            var hi = go.GetComponent<ObjectHarvestInteractable>() ?? go.AddComponent<ObjectHarvestInteractable>();
+
+            if (_byType.TryGetValue(inst.type, out var od) && od != null && od.harvest.harvestable)
+            {
+                // вычисляем клетку (если нужна логике harvest)
+                Vector2Int cell = WorldToCell(inst.worldPos, cellSize);
+                hi.Setup(od, cell);
+                hi.enabled = true;
+
+                // интерактив — делаем коллайдер триггером
+                var col = go.GetComponent<Collider2D>();
+                if (col) col.isTrigger = true;
+            }
+            else
+            {
+                hi.enabled = false;
+                // если не интерактив — можно вернуть isTrigger в false (по желанию):
+                var col = go.GetComponent<Collider2D>();
+                if (col && !(col is TilemapCollider2D)) col.isTrigger = false;
+            }
+
             return new ObjectHandle(inst.id, go);
         }
 
@@ -99,6 +126,12 @@ namespace Game.World.Objects
 
         // ------- helpers --------
 
+        private static Vector2Int WorldToCell(Vector2 worldPos, float size)
+        {
+            if (size <= 0f) size = 1f;
+            return new Vector2Int(Mathf.FloorToInt(worldPos.x / size), Mathf.FloorToInt(worldPos.y / size));
+        }
+
         private static void SetZByY(Transform t)
         {
             var p = t.position;
@@ -116,12 +149,11 @@ namespace Game.World.Objects
 
             if (preferCapsuleForTallSprites && aspect >= tallAspectThreshold)
             {
-                if (TryGetComponent(out CapsuleCollider2D cap))
-                {
-                    cap.direction = CapsuleDirection2D.Vertical;
-                    cap.size = new Vector2(b.size.x * scale.x, b.size.y * scale.y);
-                    cap.offset = new Vector2(b.center.x * scale.x, b.center.y * scale.y);
-                }// если был Box — можно отключить/удалить
+                var cap = go.GetComponent<CapsuleCollider2D>() ?? go.AddComponent<CapsuleCollider2D>();
+                cap.direction = CapsuleDirection2D.Vertical;
+                cap.size = new Vector2(b.size.x * scale.x, b.size.y * scale.y);
+                cap.offset = new Vector2(b.center.x * scale.x, b.center.y * scale.y);
+
                 var bc = go.GetComponent<BoxCollider2D>();
                 if (bc) bc.enabled = false;
             }
@@ -130,7 +162,7 @@ namespace Game.World.Objects
                 var bc = go.GetComponent<BoxCollider2D>() ?? go.AddComponent<BoxCollider2D>();
                 bc.size = new Vector2(b.size.x * scale.x, b.size.y * scale.y);
                 bc.offset = new Vector2(b.center.x * scale.x, b.center.y * scale.y);
-                // если был Capsule — можно отключить/удалить
+
                 var cc = go.GetComponent<CapsuleCollider2D>();
                 if (cc) cc.enabled = false;
             }

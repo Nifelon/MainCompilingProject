@@ -40,53 +40,43 @@ public class NPC_Commander : MonoBehaviour, IInteractable
 
     public void Interact(GameObject actor)
     {
-        var panel = Object.FindFirstObjectByType<DialogPanel>();
-        if (!questManager)
+        var panel = Object.FindObjectOfType<DialogPanel>();
+        if (panel == null) { Debug.LogWarning("Командир: не найден DialogPanel."); return; }
+        if (questManager == null) { DialogUtil.ShowLines(panel, "Командир", new[] { "Квестовый менеджер не найден." }); return; }
+
+        // 1) Получаем активный квест и тот, что нам нужен по id
+        var active = questManager.GetActive(); // вместо questManager.Active
+        var q = questManager.quests.Find(x => x.id == questId); // нужный квест
+        if (q == null)
         {
-            DialogUtil.ShowLines(panel, "Командир", new[] { "Квестовый менеджер не найден в сцене." });
+            DialogUtil.ShowLines(panel, "Командир", new[] { $"Квест '{questId}' не найден." });
             return;
         }
 
-        var active = questManager.Active;                   // текущий активный квест (или null)
-        var q = questManager.quests.Find(x => x.id == questId); // запись нужного квеста
-
-        // 1) Не активен и не выполнен — выдаём
-        if (active == null && (q == null || !q.isDone))
+        // 2) Если не активен или активен другой — предложить взять
+        if (active == null || active.id != q.id)
         {
             DialogUtil.ShowLines(panel, "Командир", intro, onClose: () =>
             {
-                questManager.ActivateById(questId);        // менеджер сам слушает QuestEventBus и двигает прогресс
-                campBinder?.SetActive();                   // лагерь -> жёлтый
+                questManager.ActivateById(q.id);  // имя метода из QuestManager
+                campBinder?.SetActive();          // если нужно перекрасить лагерь в жёлтый
             });
             return;
         }
 
-        // 2) Активен именно этот квест — прогресс/завершение
-        if (active != null && active.id == questId)
+        // 3) Активен именно этот: проверяем прогресс/завершение
+        bool isDone = (q.state == QuestProgressState.Completed) || (q.progress >= q.targetCount);
+        if (isDone)
         {
-            if (active.isDone || active.progress >= active.targetCount)
+            DialogUtil.ShowLines(panel, "Командир", done, onClose: () =>
             {
-                DialogUtil.ShowLines(panel, "Командир", done, onClose: () =>
-                {
-                    campBinder?.SetDone();                 // лагерь -> зелёный
-                });
-            }
-            else
-            {
-                DialogUtil.ShowLines(panel, "Командир", inProgress);
-            }
-            return;
+                questManager.CompleteActiveAndAdvance(); // помечаем и берём следующий (если есть)
+                campBinder?.SetDone();                   // лагерь → зелёный
+            });
         }
-
-        // 3) Уже выполнен (Active == null, но запись помечена isDone)
-        if (active == null && q != null && q.isDone)
+        else
         {
-            campBinder?.SetDone();
-            DialogUtil.ShowLines(panel, "Командир", done);
-            return;
+            DialogUtil.ShowLines(panel, "Командир", inProgress);
         }
-
-        // 4) Другой активный квест
-        DialogUtil.ShowLines(panel, "Командир", new[] { "Сначала разберись с текущей задачей." });
     }
 }

@@ -1,102 +1,151 @@
-﻿// World/WorldContent/Objects/ObjectHarvestInteractable.cs
+﻿// Managers/World/WorldContent/Objects/ObjectHarvestInteractable.cs
 using UnityEngine;
 using Game.World.Objects;
 
+[DisallowMultipleComponent]
 [RequireComponent(typeof(Collider2D))]
 public class ObjectHarvestInteractable : MonoBehaviour, IInteractable
 {
-    [Header("Data")]
-    public ObjectData data;        // присваивается из вью-адаптера
-    public Vector2Int cell;        // координата клетки (если нужна логике)
+    // DI из адаптера при спавне
+    public ObjectData Data { get; private set; }
+    public Vector2Int Cell { get; private set; }
 
-    [Header("Items")]
-    [SerializeField] private ItemDatabase itemDatabase; // назначь в инспекторе
+    [Tooltip("Если true — «гасим» коллайдер/рендер вместо SetActive(false) до респавна.")]
+    [SerializeField] private bool deactivateOnHarvest = false;
+
+    // cache
+    SpriteRenderer _sr;
+    Collider2D _col;
+    WorldObjectRef _wref;
+
+    bool _taken;
+    ObjectType _originalType;
+
+    /// <summary>Вызвать из ObjectViewPoolAdapter при конфигурации/реюзе объекта.</summary>
+    public void Setup(ObjectData data, Vector2Int cell)
+    {
+        Data = data;
+        Cell = cell;
+
+        if (_sr == null) _sr = GetComponent<SpriteRenderer>();
+        if (_col == null) _col = GetComponent<Collider2D>();
+        if (_wref == null) _wref = GetComponent<WorldObjectRef>();
+
+        _originalType = _wref ? _wref.type : ObjectType.None;
+        _taken = false;
+
+        if (_col) _col.enabled = true;
+        if (_sr) _sr.enabled = true;
+
+        enabled = Data != null && Data.harvest.harvestable;
+    }
 
     public string Hint =>
-        !string.IsNullOrEmpty(data?.harvest.interactPrompt)
-            ? data.harvest.interactPrompt
+        (Data != null && !string.IsNullOrEmpty(Data.harvest.interactPrompt))
+            ? Data.harvest.interactPrompt
             : "E — Взять";
-
-    private bool _taken;
-    private ObjectType _originalType;
-
-    private void Awake()
-    {
-        // Запомним исходный тип для корректного восстановления при респавне
-        var wref = GetComponent<WorldObjectRef>();
-        _originalType = wref ? wref.type : ObjectType.None;
-    }
 
     public void Interact(GameObject actor)
     {
-        if (_taken || data?.harvest == null || !data.harvest.harvestable)
-            return;
-
+        if (!enabled || _taken || Data == null || !Data.harvest.harvestable) return;
         _taken = true;
 
-        // 1) Выдать дропы
-        var drops = data.harvest.harvestDrops;
-        if (drops != null && drops.Count > 0)
+        // 1) Дропы из SO (ItemId + chance)
+        var drops = Data.harvest.harvestDrops;
+        if (drops != null)
         {
             for (int i = 0; i < drops.Count; i++)
             {
                 var d = drops[i];
-                if (string.IsNullOrEmpty(d.itemId)) continue;
+
+                // chance: в ваших ассетах по умолчанию 0f → трактуем как 100%
+                float p = (d.chance <= 0f) ? 1f : Mathf.Clamp01(d.chance);
+                if (Random.value > p) continue;
 
                 // безопасный диапазон
-                int min = Mathf.Min(d.minCount, d.maxCount);
-                int max = Mathf.Max(d.minCount, d.maxCount);
-                int n = Random.Range(min, max + 1);
+                int min = d.minCount < d.maxCount ? d.minCount : d.maxCount;
+                int max = d.maxCount > d.minCount ? d.maxCount : d.minCount;
+                int n = Random.Range(min, max + 1); // int: max эксклюзивен, поэтому +1
                 if (n <= 0) continue;
 
-                // 1) пробуем как enum: "Berry", "Skin"...
-                if (System.Enum.TryParse<ItemId>(d.itemId, true, out var eid))
-                {
-                    InventoryService.Add(eid, n);
-                }
-                // 2) или через базу по имени ассета (если имя в SO ≠ имени enum)
-                else if (itemDatabase != null)
-                {
-                    InventoryService.TryAddByName(d.itemId, n, itemDatabase);
-                }
-                else
-                {
-                    Debug.LogWarning($"[Harvest] Unknown item '{d.itemId}' and no ItemDatabase assigned.");
-                }
+                //if (d.itemId != ItemId.None)
+                    InventoryService.Add(d.itemId, n);
+                //else
+                //    Debug.LogWarning($"[Harvest] Drop has ItemId.None on {name} ({Data.type}).");
             }
         }
 
         // 2) Поведение после сбора
-        var toType = data.harvest.transformToType;
-        if (data.harvest.destroyOnHarvest || toType == ObjectType.None)
+        var toType = Data.harvest.transformToType;
+        if (Data.harvest.destroyOnHarvest || toType == ObjectType.None)
         {
-            // На альфу — просто скрываем/депуллим
-            gameObject.SetActive(false);
+            if (deactivateOnHarvest)
+            {
+                if (_col) _col.enabled = false;
+                if (_sr) _sr.enabled = false;
+                enabled = false;
+            }
+            else
+            {
+                gameObject.SetActive(false);
+            }
         }
         else
         {
-            // Трансформация, напр.: BerryBush -> Bush
-            var wref = GetComponent<WorldObjectRef>();
-            if (wref != null) wref.type = toType;
-
-            // Деактивируем — при повторной активации твой вью-адаптер подтянет спрайт/коллайдер по новому типу
-            gameObject.SetActive(false);
+            if (_wref != null) _wref.type = toType;
+            ApplyViewFor(_wref.type);           // без SetActive
+            if (_col) _col.enabled = false;
+            enabled = false;
         }
 
-        // 3) Респавн (на альфу обычно 0 — выкл)
-        float t = Mathf.Max(0f, data.harvest.respawnSeconds);
-        if (t > 0f) StartCoroutine(CoRespawn(t));
+        // 3) Респавн (централизованный планировщик)
+        float t = Mathf.Max(0f, Data.harvest.respawnSeconds);
+        if (t > 0f) HarvestRespawnScheduler.Schedule(this, Time.time + t);
     }
 
-    private System.Collections.IEnumerator CoRespawn(float delay)
+    // Визуал/коллайдер под новый тип (спрайты — spriteVariants[0])
+    void ApplyViewFor(ObjectType type)
     {
-        yield return new WaitForSeconds(delay);
+        var newData = Data;
+        if (_wref != null && Data != null && _wref.type != Data.type)
+        {
+            // используй свой реестр (ниже — пример с ObjectDataDB)
+            newData = ObjectDataDB.Get(_wref.type) ?? Data;
+        }
 
-        // Вернуть исходный тип, если до этого трансформировали
-        var wref = GetComponent<WorldObjectRef>();
-        if (wref != null) wref.type = _originalType;
+        Sprite spr = null;
+        if (newData != null && newData.spriteVariants != null && newData.spriteVariants.Length > 0)
+            spr = newData.spriteVariants[0]; // дефолтный вариант
 
+        if (_sr != null && spr != null)
+            _sr.sprite = spr;
+
+        if (_col is BoxCollider2D bc && _sr != null && _sr.sprite != null)
+        {
+            var b = _sr.sprite.bounds;
+            bc.size = b.size;
+            bc.offset = b.center;
+        }
+    }
+
+    // Вызывается планировщиком
+    internal void RespawnNow()
+    {
         _taken = false;
-        gameObject.SetActive(true); // адаптер на OnEnable/активации подтянет визуал и коллайдер
+        if (_wref != null) _wref.type = _originalType;
+
+        ApplyViewFor(_wref ? _wref.type : (Data ? Data.type : ObjectType.None));
+
+        if (deactivateOnHarvest)
+        {
+            if (_sr) _sr.enabled = true;
+            if (_col) _col.enabled = true;
+            enabled = Data != null && Data.harvest.harvestable;
+        }
+        else
+        {
+            if (!gameObject.activeSelf) gameObject.SetActive(true);
+            enabled = Data != null && Data.harvest.harvestable;
+        }
     }
 }

@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 39375645421972742b7c19cbe01d69e4, type: 3}
-  m_Name: Berry
+  m_Name: Skin
   m_EditorClassIdentifier: 
-  id: 1
-  displayName: " \u042F\u0433\u043E\u0434\u0430"
-  icon: {fileID: -5874365850801430579, guid: 2c2276f52c145cd4c9fe032ec2020474, type: 3}
+  id: 2
+  displayName: "\u0428\u043A\u0443\u0440\u0430"
+  icon: {fileID: -5476281950244718739, guid: fd919ce141d8fab4facca24260c81ec4, type: 3}
   maxStack: 99

@@ -48,7 +48,7 @@ namespace Game.World.Objects
     public struct DropEntry
     {
         [Tooltip("ID предмета в твоей системе предметов (пока string или int).")]
-        public string itemId;
+        public ItemId itemId;
         [Min(0)] public int minCount;
         [Min(0)] public int maxCount;
         [Range(0, 1)] public float chance;
