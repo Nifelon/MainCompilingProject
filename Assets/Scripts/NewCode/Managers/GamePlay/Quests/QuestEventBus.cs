@@ -1,29 +1,50 @@
-using System;
+п»їusing System;
+using Game.Items;   // <-- Р”РћР‘РђР’РР›Р
+using Game.Actors; // ActorIdKind, NPCEnums, CreatureEnums
 
 public static class QuestEventBus
 {
-    // Сбор предметов (id, количество)
-    public static event Action<string, int> OnCollect;
-    // Убийство существа (тип/вид)
-    public static event Action<string> OnUnitKilled;
-    // Крафт (id предмета, количество)
-    public static event Action<string, int> OnCraft;
+    public static event Action<ItemId, int> OnCollect;
+    public static event Action<ActorIdKind, NPCEnums, CreatureEnums> OnUnitKilled;
 
+    // legacy вЂ” РЅР° РІСЂРµРјСЏ РјРёРіСЂР°С†РёРё
+    public static event Action<string, int> OnCollectLegacy;
+    public static event Action<string> OnUnitKilledLegacy;
+
+    public static void RaiseCollect(ItemId itemId, int amount)
+    {
+        if (amount <= 0) return;
+        if (!ItemMap.IsValid(itemId)) return;
+        OnCollect?.Invoke(itemId, amount);
+    }
+
+    public static void RaiseCollectGuid(string guid, int amount)
+    {
+        if (amount <= 0 || string.IsNullOrWhiteSpace(guid)) return;
+        if (ItemMap.TryEnumByGuid(guid, out var id))
+            OnCollect?.Invoke(id, amount);
+        else
+            OnCollectLegacy?.Invoke(guid, amount);
+    }
+
+    public static void RaiseUnitKilled(ActorIdKind kind, NPCEnums npc, CreatureEnums creature)
+    {
+        OnUnitKilled?.Invoke(kind, npc, creature);
+    }
+
+    // legacy
     public static void RaiseCollect(string itemId, int amount)
     {
         if (amount <= 0 || string.IsNullOrWhiteSpace(itemId)) return;
-        OnCollect?.Invoke(itemId, amount);
+        OnCollectLegacy?.Invoke(itemId, amount);
     }
 
     public static void RaiseUnitKilled(string unitKind)
     {
         if (string.IsNullOrWhiteSpace(unitKind)) return;
-        OnUnitKilled?.Invoke(unitKind);
+        OnUnitKilledLegacy?.Invoke(unitKind);
     }
 
-    public static void RaiseCraft(string itemId, int amount)
-    {
-        if (amount <= 0 || string.IsNullOrWhiteSpace(itemId)) return;
-        OnCraft?.Invoke(itemId, amount);
-    }
+    [Obsolete("Craft Р±РѕР»СЊС€Рµ РЅРµ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ: РїСЂРµРґРјРµС‚РЅС‹Рµ РєРІРµСЃС‚С‹ СЃС‡РёС‚Р°СЋС‚СЃСЏ РїРѕ Collect/РёРЅРІРµРЅС‚Р°СЂСЋ.")]
+    public static void RaiseCraft(string itemId, int amount) { /* no-op */ }
 }

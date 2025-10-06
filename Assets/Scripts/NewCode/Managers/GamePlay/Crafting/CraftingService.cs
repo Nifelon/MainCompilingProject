@@ -1,17 +1,14 @@
-using UnityEngine;
+using Game.Items;
 
 public static class CraftingService
 {
-    // Обмен 1 Skin -> 3 LeatherPatch
+    // Пример обмена: 1 Skin -> 3 LeatherPatch
     public static bool ExchangeSkinToPatches()
     {
-        if (InventoryService.Count(ItemId.Skin) < 1) return false;
+        // Одним действием — безопаснее (без гонок между Count и Remove)
+        if (!InventoryService.Remove(ItemId.Skin, 1)) return false;
 
-        InventoryService.Remove(ItemId.Skin, 1);
-        InventoryService.Add(ItemId.LeatherPatch, 3);
-
-        // Квест: учесть крафт
-        QuestEventBus.RaiseCraft(ItemId.LeatherPatch.ToString(), 3);
+        InventoryService.Add(ItemId.LeatherPatch, 3); // это поднимет QuestEventBus.RaiseCollect(...)
         return true;
     }
 }

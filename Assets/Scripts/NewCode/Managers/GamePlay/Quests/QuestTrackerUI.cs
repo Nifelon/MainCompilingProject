@@ -35,7 +35,7 @@ public class QuestTrackerUI : MonoBehaviour
         int max = Mathf.Max(1, q.targetCount);
 
         if (titleText) titleText.text = string.IsNullOrEmpty(q.title) ? q.id : q.title;
-        if (progressText) progressText.text = $"{cur}/{max} ({q.targetId})";
+        if (progressText) progressText.text = $"{cur}/{max} ({q.GetTargetLabel()})";
 
         if (progressBar)
         {

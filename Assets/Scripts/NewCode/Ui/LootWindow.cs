@@ -2,6 +2,7 @@
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using Game.Items;
 
 public class LootWindow : MonoBehaviour
 {
@@ -14,7 +15,7 @@ public class LootWindow : MonoBehaviour
     public Button takeAllBtn, closeBtn;
 
     [Header("Data (optional)")]
-    public ItemDatabase itemDatabase;     // ассет базы предметов (для названий/иконок)
+    public ItemDatabase itemDatabase;     // для названий/иконок
 
     [Header("Hotkeys")]
     public KeyCode takeAllKey = KeyCode.E;
@@ -38,11 +39,9 @@ public class LootWindow : MonoBehaviour
 
     void Update()
     {
-        if (IsOpen)
-        {
-            if (Input.GetKeyDown(takeAllKey)) TakeAll();
-            if (Input.GetKeyDown(closeKey)) Close();
-        }
+        if (!IsOpen) return;
+        if (Input.GetKeyDown(takeAllKey)) TakeAll();
+        if (Input.GetKeyDown(closeKey)) Close();
     }
 
     // ---------- ПУБЛИЧНЫЕ API ----------
@@ -76,10 +75,11 @@ public class LootWindow : MonoBehaviour
             foreach (var it in items)
             {
                 if (it.count <= 0 || string.IsNullOrWhiteSpace(it.id)) continue;
+
                 if (TryResolveItemId(it.id, out var eid))
                     conv.Add((eid, it.count));
                 else
-                    Debug.LogWarning($"[LootWindow] Unknown item id '{it.id}'. Assign ItemDatabase or fix id.");
+                    Debug.LogWarning($"[LootWindow] Unknown item id '{it.id}'. Expected GUID/enum/displayName.");
             }
 
             foreach (var g in conv.GroupBy(x => x.id))
@@ -106,20 +106,16 @@ public class LootWindow : MonoBehaviour
 
     void Render()
     {
-        // очистить старое
         foreach (Transform c in content) Destroy(c.gameObject);
 
-        // отрисовать записи
         foreach (var it in _items)
         {
             var go = Instantiate(entryPrefab, content);
 
-            // тексты (первый — имя, последний — количество)
             var texts = go.GetComponentsInChildren<Text>(true);
             if (texts.Length > 0) texts[0].text = ResolveDisplayName(it.id);
-            if (texts.Length > 1) texts[texts.Length - 1].text = "×" + it.count;
+            if (texts.Length > 1) texts[^1].text = "×" + it.count;
 
-            // иконка (ищем Image с именем, содержащим "Icon")
             var icon = FindIcon(go);
             if (icon)
             {
@@ -139,7 +135,7 @@ public class LootWindow : MonoBehaviour
             for (int i = 0; i < _items.Count; i++)
             {
                 var it = _items[i];
-                InventoryService.Add(it.id, it.count); // Add(ItemId,int)
+                InventoryService.Add(it.id, it.count);
             }
             _items.Clear();
         }
@@ -148,7 +144,6 @@ public class LootWindow : MonoBehaviour
 
     // ---------- HELPERS ----------
 
-    // Имя для отображения (из SO, если есть; иначе enum.ToString())
     string ResolveDisplayName(ItemId id)
     {
         var so = GetItemSO(id);
@@ -157,32 +152,35 @@ public class LootWindow : MonoBehaviour
         return id.ToString();
     }
 
-    // Достаём ItemSO из базы по enum
     ItemSO GetItemSO(ItemId id)
     {
         if (!itemDatabase) return null;
-        return itemDatabase.Get(id); // у тебя есть Get(ItemId) и GetByName(string)
+        return itemDatabase.Get(id);
     }
 
-    // Конвертируем строковый id → ItemId
+    /// <summary>GUID → ItemId, enumName → ItemId, displayName → ItemId.</summary>
     bool TryResolveItemId(string s, out ItemId id)
     {
-        // 1) enum по имени (Berry, Skin, LeatherPatch ...)
+        // 1) GUID напрямую
+        if (ItemMap.TryEnumByGuid(s, out id))
+            return true;
+
+        // 2) Имя enum (без учёта регистра)
         if (System.Enum.TryParse(s, true, out id))
             return true;
 
-        // 2) из базы по имени ассета (!!! была ошибка: раньше вызывался Get(id))
+        // 3) Имя через базу (displayName / Unity name)
         if (itemDatabase)
         {
-            var so = itemDatabase.GetByName(s); // <-- правильный вызов
-            if (so) { id = so.id; return true; }
+            var so = itemDatabase.GetByName(s);
+            if (so && !string.IsNullOrWhiteSpace(so.Guid) &&
+                ItemMap.TryEnumByGuid(so.Guid, out id))
+                return true;
         }
-
         id = default;
         return false;
     }
 
-    // Находим Image для иконки (по имени)
     Image FindIcon(GameObject entry)
     {
         var imgs = entry.GetComponentsInChildren<Image>(true);

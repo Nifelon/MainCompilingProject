@@ -1,19 +1,17 @@
 ﻿// Managers/World/WorldContent/Objects/ObjectHarvestInteractable.cs
 using UnityEngine;
 using Game.World.Objects;
+using Game.Items; // ItemMap, ItemId
 
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Collider2D))]
 public class ObjectHarvestInteractable : MonoBehaviour, IInteractable
 {
-    // DI из адаптера при спавне
     public ObjectData Data { get; private set; }
     public Vector2Int Cell { get; private set; }
 
-    [Tooltip("Если true — «гасим» коллайдер/рендер вместо SetActive(false) до респавна.")]
     [SerializeField] private bool deactivateOnHarvest = false;
 
-    // cache
     SpriteRenderer _sr;
     Collider2D _col;
     WorldObjectRef _wref;
@@ -21,7 +19,6 @@ public class ObjectHarvestInteractable : MonoBehaviour, IInteractable
     bool _taken;
     ObjectType _originalType;
 
-    /// <summary>Вызвать из ObjectViewPoolAdapter при конфигурации/реюзе объекта.</summary>
     public void Setup(ObjectData data, Vector2Int cell)
     {
         Data = data;
@@ -50,7 +47,6 @@ public class ObjectHarvestInteractable : MonoBehaviour, IInteractable
         if (!enabled || _taken || Data == null || !Data.harvest.harvestable) return;
         _taken = true;
 
-        // 1) Дропы из SO (ItemId + chance)
         var drops = Data.harvest.harvestDrops;
         if (drops != null)
         {
@@ -58,24 +54,41 @@ public class ObjectHarvestInteractable : MonoBehaviour, IInteractable
             {
                 var d = drops[i];
 
-                // chance: в ваших ассетах по умолчанию 0f → трактуем как 100%
+                // chance: 0 трактуем как 100% на альфе
                 float p = (d.chance <= 0f) ? 1f : Mathf.Clamp01(d.chance);
                 if (Random.value > p) continue;
 
-                // безопасный диапазон
+                // безопасный диапазон количества
                 int min = d.minCount < d.maxCount ? d.minCount : d.maxCount;
                 int max = d.maxCount > d.minCount ? d.maxCount : d.minCount;
-                int n = Random.Range(min, max + 1); // int: max эксклюзивен, поэтому +1
+                int n = Random.Range(min, max + 1);
                 if (n <= 0) continue;
 
-                //if (d.itemId != ItemId.None)
+                // 1) Предпочтительно: ItemSO → GUID → ItemId
+                if (d.item != null && !string.IsNullOrWhiteSpace(d.item.Guid))
+                {
+                    if (ItemMap.TryEnumByGuid(d.item.Guid, out var enumId) && ItemMap.IsValid(enumId))
+                    {
+                        InventoryService.Add(enumId, n);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[Harvest] No ItemId mapping for {d.item.name} ({d.item.Guid}) on {name} ({Data.type}).");
+                    }
+                }
+                // 2) Фолбэк: легаси enum, только если валиден в ItemMap
+                else if (ItemMap.IsValid(d.itemId))
+                {
                     InventoryService.Add(d.itemId, n);
-                //else
-                //    Debug.LogWarning($"[Harvest] Drop has ItemId.None on {name} ({Data.type}).");
+                }
+                else
+                {
+                    Debug.LogWarning($"[Harvest] Drop has no valid item reference on {name} ({Data?.type}).");
+                }
             }
         }
 
-        // 2) Поведение после сбора
+        // Поведение после сбора
         var toType = Data.harvest.transformToType;
         if (Data.harvest.destroyOnHarvest || toType == ObjectType.None)
         {
@@ -93,47 +106,41 @@ public class ObjectHarvestInteractable : MonoBehaviour, IInteractable
         else
         {
             if (_wref != null) _wref.type = toType;
-            ApplyViewFor(_wref.type);           // без SetActive
+            ApplyViewFor(_wref.type);
             if (_col) _col.enabled = false;
             enabled = false;
         }
 
-        // 3) Респавн (централизованный планировщик)
+        // Респавн
         float t = Mathf.Max(0f, Data.harvest.respawnSeconds);
         if (t > 0f) HarvestRespawnScheduler.Schedule(this, Time.time + t);
     }
 
-    // Визуал/коллайдер под новый тип (спрайты — spriteVariants[0])
     void ApplyViewFor(ObjectType type)
     {
         var newData = Data;
         if (_wref != null && Data != null && _wref.type != Data.type)
         {
-            // используй свой реестр (ниже — пример с ObjectDataDB)
             newData = ObjectDataDB.Get(_wref.type) ?? Data;
         }
 
         Sprite spr = null;
         if (newData != null && newData.spriteVariants != null && newData.spriteVariants.Length > 0)
-            spr = newData.spriteVariants[0]; // дефолтный вариант
+            spr = newData.spriteVariants[0];
 
-        if (_sr != null && spr != null)
-            _sr.sprite = spr;
+        if (_sr != null && spr != null) _sr.sprite = spr;
 
         if (_col is BoxCollider2D bc && _sr != null && _sr.sprite != null)
         {
             var b = _sr.sprite.bounds;
-            bc.size = b.size;
-            bc.offset = b.center;
+            bc.size = b.size; bc.offset = b.center;
         }
     }
 
-    // Вызывается планировщиком
     internal void RespawnNow()
     {
         _taken = false;
         if (_wref != null) _wref.type = _originalType;
-
         ApplyViewFor(_wref ? _wref.type : (Data ? Data.type : ObjectType.None));
 
         if (deactivateOnHarvest)

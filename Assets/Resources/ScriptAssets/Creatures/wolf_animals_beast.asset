@@ -31,10 +31,10 @@ MonoBehaviour:
   loot: []
   icon: {fileID: 5036923083362090361, guid: 995a6a4610aa4bf45b502101e1dd3e12, type: 3}
   prefab: {fileID: 0}
-  maxHealth: 10
+  maxHealth: 50
   baseSpeed: 2
   agroRadius: 8
   fleeThresholdHp: 0.2
   territorialRadius: 12
   dayActive: 1
-  nightActive: 1
+  nightActive: 0

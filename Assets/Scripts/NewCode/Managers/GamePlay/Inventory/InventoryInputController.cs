@@ -1,4 +1,5 @@
 // Assets/Scripts/NewCode/UI/Inventory/InventoryInputController.cs
+using Game.Items;
 using UnityEngine;
 
 public class InventoryInputController : MonoBehaviour

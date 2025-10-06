@@ -1,3 +1,5 @@
+﻿using Game.Actors;
+using Game.Items;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,22 +13,45 @@ public class QuestManager : MonoBehaviour
 
     public event Action<QuestConfig> OnQuestChanged;
 
+    // Текущий активный квест (или null)
     QuestConfig Active => quests.FirstOrDefault(q => q.id == activeQuestId);
+
+    // Активен ли сейчас квест нужного типа?
+    static bool IsActiveOf(QuestConfig q, QuestKind kind)
+    {
+        return q != null
+            && q.state == QuestProgressState.Active
+            && q.kind == kind;
+    }
 
     void OnEnable()
     {
-        QuestEventBus.OnCollect += HandleCollect;
-        QuestEventBus.OnUnitKilled += HandleKill;
-        QuestEventBus.OnCraft += HandleCraft;
-    }
-    void OnDisable()
-    {
-        QuestEventBus.OnCollect -= HandleCollect;
-        QuestEventBus.OnUnitKilled -= HandleKill;
-        QuestEventBus.OnCraft -= HandleCraft;
+        // Kill (типизированный) + legacy для плавной миграции
+        QuestEventBus.OnUnitKilled += HandleKillTyped;
+        QuestEventBus.OnUnitKilledLegacy += HandleKillLegacy;
+
+        // Collect считаем по НАЛИЧИЮ в инвентаре → слушаем инвентарь
+        InventoryService.OnChanged += HandleInventoryChanged;
+
+        // Эти события — лишь триггеры пересчёта (реальный прогресс берём из InventoryService)
+        QuestEventBus.OnCollect += HandleCollectTyped;
+        QuestEventBus.OnCollectLegacy += HandleCollectLegacy;
     }
 
-    // UI: ����� ��������� ���������
+    void OnDisable()
+    {
+        QuestEventBus.OnUnitKilled -= HandleKillTyped;
+        QuestEventBus.OnUnitKilledLegacy -= HandleKillLegacy;
+
+        InventoryService.OnChanged -= HandleInventoryChanged;
+
+        QuestEventBus.OnCollect -= HandleCollectTyped;
+        QuestEventBus.OnCollectLegacy -= HandleCollectLegacy;
+    }
+
+    // === API ===
+
+    // Взять первый доступный квест
     public void ActivateAnyAvailable()
     {
         var q = quests.FirstOrDefault(x => x.state == QuestProgressState.NotStarted);
@@ -42,6 +67,11 @@ public class QuestManager : MonoBehaviour
         q.progress = 0;
         q.state = QuestProgressState.Active;
         activeQuestId = q.id;
+
+        // Для Collect сразу посчитать прогресс по текущему инвентарю
+        if (q.kind == QuestKind.Collect)
+            RecalcCollectProgress(q);
+
         FireChanged(q);
     }
 
@@ -49,56 +79,73 @@ public class QuestManager : MonoBehaviour
     {
         var q = Active;
         if (q == null) return;
+
         q.state = QuestProgressState.Completed;
         FireChanged(q);
 
-        // ����������� �� ��������� NotStarted (�� �����������)
         var next = quests.FirstOrDefault(x => x.state == QuestProgressState.NotStarted);
-        if (next != null)
-        {
-            ActivateById(next.id);
-        }
+        if (next != null) ActivateById(next.id);
     }
 
-    // --- Event handlers ---
+    // === Kill ===
 
-    void HandleCollect(string itemId, int amount)
+    // Типизированное событие убийства
+    void HandleKillTyped(ActorIdKind kind, NPCEnums npc, CreatureEnums creature)
+    {
+        var q = Active;
+        if (!IsActiveOf(q, QuestKind.Kill)) return;
+        if (!q.killTarget.Matches(kind, npc, creature)) return;
+        Bump(q, 1);
+    }
+
+    // Legacy (строка) — на переходный период
+    void HandleKillLegacy(string unitKind)
+    {
+        var q = Active;
+        if (!IsActiveOf(q, QuestKind.Kill)) return;
+        if (!IdEq(q.killTarget.Label, unitKind)) return;
+        Bump(q, 1);
+    }
+
+    // === Collect — по наличию предмета в инвентаре ===
+
+    // Любое изменение инвентаря → пересчёт активного Collect
+    void HandleInventoryChanged()
     {
         var q = Active;
         if (q == null || q.state != QuestProgressState.Active) return;
         if (q.kind != QuestKind.Collect) return;
-        if (!IdEq(q.targetId, itemId)) return;
 
-        Bump(q, amount);
+        RecalcCollectProgress(q);
+        FireChanged(q);
     }
 
-    void HandleKill(string unitKind)
+    // Эти два — просто триггеры пересчёта (на случай прямых RaiseCollect)
+    void HandleCollectTyped(ItemId id, int amount)
     {
-        var q = Active;
-        if (q == null || q.state != QuestProgressState.Active) return;
-        if (q.kind != QuestKind.Kill) return;
-        if (!IdEq(q.targetId, unitKind)) return;
-
-        Bump(q, 1);
+        HandleInventoryChanged();
     }
 
-    void HandleCraft(string itemId, int amount)
+    void HandleCollectLegacy(string id, int amount)
     {
-        var q = Active;
-        if (q == null || q.state != QuestProgressState.Active) return;
-        if (q.kind != QuestKind.Craft) return;
-        if (!IdEq(q.targetId, itemId)) return;
-
-        Bump(q, amount);
+        HandleInventoryChanged();
     }
+
+    void RecalcCollectProgress(QuestConfig q)
+    {
+        int have = InventoryService.Count(q.itemTarget);
+        q.progress = Mathf.Clamp(have, 0, Mathf.Max(1, q.targetCount));
+        if (q.progress >= q.targetCount)
+            q.state = QuestProgressState.Completed;
+    }
+
+    // === Helpers ===
 
     void Bump(QuestConfig q, int delta)
     {
         q.progress = Mathf.Clamp(q.progress + Mathf.Max(0, delta), 0, Mathf.Max(1, q.targetCount));
         if (q.progress >= q.targetCount)
-        {
             q.state = QuestProgressState.Completed;
-        }
         FireChanged(q);
     }
 
@@ -108,11 +155,11 @@ public class QuestManager : MonoBehaviour
 
     void FireChanged(QuestConfig q) => OnQuestChanged?.Invoke(q);
 
-    // ��������������� API ��� UI
+    // === Удобное API для UI ===
     public QuestConfig GetActive() => Active;
     public int GetActiveProgress() => Active?.progress ?? 0;
     public int GetActiveTarget() => Active?.targetCount ?? 0;
     public string GetActiveTitle() => Active?.title ?? "";
-    public string GetActiveTargetId() => Active?.targetId ?? "";
-    public bool IsActiveCompleted() => Active?.state == QuestProgressState.Completed;
+    public string GetActiveTargetLabel() => Active?.GetTargetLabel() ?? "";
+    public bool IsActiveCompleted() => Active != null && Active.state == QuestProgressState.Completed;
 }
